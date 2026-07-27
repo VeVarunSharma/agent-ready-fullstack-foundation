@@ -6,7 +6,6 @@ const bundlePath = fileURLToPath(new URL("../dist/migrate-production.mjs", impor
 const result = spawnSync(process.execPath, [bundlePath], {
   encoding: "utf8",
   env: {
-    DATABASE_MODE: "disabled",
     RUNTIME_MODE: "production",
   },
 });
@@ -15,4 +14,4 @@ assert.equal(result.error, undefined);
 assert.equal(result.status, 1);
 assert.equal(result.signal, null);
 assert.equal(result.stdout, "");
-assert.equal(result.stderr, "Production PostgreSQL migration failed.\n");
+assert.equal(result.stderr, "Production Supabase migration failed.\n");

@@ -1,300 +1,199 @@
-# Database bootstrap
+# Supabase database bootstrap
 
-Azure RBAC and Flexible Server Entra authentication do not create PostgreSQL roles. This one-time
-runbook creates and verifies OID-bound principals for the application and migration managed
-identities after an authorized server deployment.
+This runbook creates and verifies separate PostgreSQL roles for Vercel runtime and protected schema
+migration. It does not create a Supabase project or authorize production access.
 
-> No Azure PostgreSQL server or principal exists. Do not run these steps against any environment
-> without separate authorization, approved values, backup/recovery evidence, and a private network
-> path.
+> No Supabase project, role, credential, root certificate, backup policy, or production schema is
+> configured. Run only through an approved private operator process with a verified target and
+> recovery evidence. Never paste production values into source, issues, PRs, terminal transcripts,
+> or SQL shared through public channels.
 
-## Identity and privilege model
+## Identity model
 
-| Identity                            | Azure purpose                                               | PostgreSQL purpose                                                      |
-| ----------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Entra administrator group           | Bootstrap/recovery only                                     | Create Entra principals, grant/revoke, verify; not application runtime  |
-| Application user-assigned identity  | ACR pull, approved Key Vault reads, database token          | Connect and perform only PRD-approved DML; no schema creation/ownership |
-| Migration user-assigned identity    | ACR pull and manual migration job                           | Own/apply reviewed DDL and migration metadata; no app runtime           |
-| Delivery what-if identity           | Read-only ARM planning                                      | No database login                                                       |
-| Delivery infrastructure identity    | Reviewed ARM resource/RBAC deployment                       | No database login                                                       |
-| Delivery registry identity          | Private ACR publication only                                | No database login                                                       |
-| Delivery migration/runtime identity | Start/inspect the job, shift/restore traffic, query rollout | No database login; the job uses the migration identity                  |
+| Identity                       | Purpose                                                       | Prohibited                                                 |
+| ------------------------------ | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| Supabase project administrator | One-time role/grant/bootstrap and recovery                    | Application runtime                                        |
+| Runtime database role          | Approved DML only through transaction pooler `6543`           | DDL, ownership, migration metadata, role/admin, bypass RLS |
+| Migration database role        | Reviewed DDL/migration metadata through direct/session `5432` | Application runtime, superuser-like privileges             |
+| GitHub migration job           | Uses migration role from protected environment                | Runtime role and Supabase management/service-role key      |
+| Vercel runtime                 | Uses runtime role from encrypted Production settings          | Migration/admin role and migration secrets                 |
 
-Use groups for human administration. Do not grant broad Azure Owner or PostgreSQL superuser-like
-duties to application/migration identities.
+The two database roles require different credentials and rotation. Do not use `postgres`,
+`supabase_admin`, `service_role`, `anon`, or `authenticated`.
 
 ## Prerequisites
 
-- Production preflight and same-run reviewed/fresh what-if evidence passed.
-- Flexible Server exists in the approved region with public access/password auth disabled.
-- The Entra administrator resource points to the approved administrator group.
-- Private endpoint/DNS resolves from the authorized bootstrap runner.
-- App and migration user-assigned identities exist; their immutable Entra object/principal IDs and
-  approved PostgreSQL principal names are recorded.
-- A restore/recovery plan and evidence-storage location are approved.
-- The protected environment, four distinct delivery FICs/client IDs, least-privilege Azure RBAC, and
-  isolated VNet-connected runner are externally approved and verified.
-- The exact schema/grant contract is in a persistence-impact PRD. At bootstrap, the repository
-  schema is empty and no application table grant is justified.
-- Current Microsoft Flexible Server Entra principal syntax is rechecked before execution.
+- Production/nonproduction Supabase projects are separate and their exact regions are approved.
+- Current Supabase connection/pooler documentation and custom-role behavior are rechecked.
+- The direct/session endpoint on port `5432` and transaction endpoint on `6543` are known.
+- The current Supabase root certificate is obtained from the project Connect settings and verified.
+- Backup/PITR, restore, retention, support, incident, RPO/RTO, and credential rotation are approved.
+- The GitHub protected environment and Vercel environment administrators are distinct where
+  practical.
+- The persistence PRD defines schema, grants, RLS/application authorization, rollout compatibility,
+  and recovery. The current schema is empty.
 
-Do not use the client ID where PostgreSQL requires the managed identity object/principal ID.
+## Create dedicated roles
 
-## Gather values read-only
-
-From an authorized VNet-connected operator/runner, retrieve values from reviewed deployment outputs
-or read-only CLI queries. Never copy them into source:
-
-```sh
-export RESOURCE_GROUP="<approved-resource-group>"
-export APP_IDENTITY_NAME="<approved-app-identity-name>"
-export MIGRATION_IDENTITY_NAME="<approved-migration-identity-name>"
-
-APP_OBJECT_ID="$(
-  az identity show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$APP_IDENTITY_NAME" \
-    --query principalId \
-    --output tsv
-)"
-MIGRATION_OBJECT_ID="$(
-  az identity show \
-    --resource-group "$RESOURCE_GROUP" \
-    --name "$MIGRATION_IDENTITY_NAME" \
-    --query principalId \
-    --output tsv
-)"
-```
-
-Fail if a query is empty or differs from reviewed IaC evidence. Do not print tokens or complete
-environment dumps.
-
-## Connect as the Entra administrator
-
-Acquire a short-lived token for Azure OSS RDBMS and pass it to `psql` only in process environment:
-
-```sh
-export PGHOST="<private-postgres-fqdn>"
-export PGPORT="5432"
-export PGDATABASE="<approved-database>"
-export PGUSER="<approved-entra-admin-principal>"
-export PGSSLMODE="verify-full"
-export PGPASSWORD="$(
-  az account get-access-token \
-    --resource-type oss-rdbms \
-    --query accessToken \
-    --output tsv
-)"
-
-psql --no-psqlrc --set=ON_ERROR_STOP=1
-unset PGPASSWORD
-```
-
-The current database client uses system trust with `rejectUnauthorized`; production operator images
-must include an approved CA bundle. Do not switch to `sslmode=require` or disable certificate
-verification to bypass trust failures.
-
-## Inspect before creating
-
-In `psql`, set reviewed values:
+Connect through an authorized administrator session using verified TLS. Supply generated passwords
+through process environment or an approved secret mechanism, never command history. Use reviewed,
+project-specific role names:
 
 ```sql
-\set app_name '<approved-app-principal-name>'
-\set app_oid '<app-managed-identity-object-id>'
-\set migration_name '<approved-migration-principal-name>'
-\set migration_oid '<migration-managed-identity-object-id>'
-\set db_name '<approved-database>'
+CREATE ROLE application_runtime
+  LOGIN
+  NOSUPERUSER
+  NOCREATEDB
+  NOCREATEROLE
+  NOINHERIT
+  NOREPLICATION
+  NOBYPASSRLS;
 
-SELECT current_user, current_database();
-
-SELECT rolname
-FROM pg_catalog.pg_roles
-WHERE rolname IN (:'app_name', :'migration_name');
+CREATE ROLE schema_migration
+  LOGIN
+  NOSUPERUSER
+  NOCREATEDB
+  NOCREATEROLE
+  NOINHERIT
+  NOREPLICATION
+  NOBYPASSRLS;
 ```
 
-If a name exists, verify its Entra object mapping using the current Azure PostgreSQL
-catalog/functions before proceeding. A same-name role is not proof of the correct object. Stop on an
-unexpected mapping; do not drop/recreate it casually.
+Set each password through a parameterized/secret-fed administrator process. Do not embed a password
+literal in a migration, SQL file, shell command, or provider screenshot.
 
-## Create OID-bound service principals
+If roles already exist, inspect their attributes, memberships, ownership, and active sessions before
+changing anything. A matching name is not proof of safe state.
 
-After verifying the current supported function signature:
+## Baseline grants for the empty schema
 
-```sql
-SELECT *
-FROM pgaadauth_create_principal_with_oid(
-  :'app_name',
-  :'app_oid',
-  'service',
-  false,
-  false
-);
-
-SELECT *
-FROM pgaadauth_create_principal_with_oid(
-  :'migration_name',
-  :'migration_oid',
-  'service',
-  false,
-  false
-);
-```
-
-Use the OID-explicit function so duplicate display names cannot bind the wrong service principal.
-Treat “already exists” as a verification branch, not permission to ignore identity mismatch.
-
-## Baseline grants
-
-With the current empty schema, grant connection and migration capability only:
+Replace identifiers through safe administrator parameters:
 
 ```sql
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
-GRANT CONNECT ON DATABASE :"db_name" TO :"app_name";
-GRANT CONNECT ON DATABASE :"db_name" TO :"migration_name";
+GRANT CONNECT ON DATABASE postgres TO application_runtime;
+GRANT CONNECT ON DATABASE postgres TO schema_migration;
 
-GRANT USAGE ON SCHEMA public TO :"app_name";
-GRANT USAGE, CREATE ON SCHEMA public TO :"migration_name";
+GRANT USAGE ON SCHEMA public TO application_runtime;
+GRANT USAGE, CREATE ON SCHEMA public TO schema_migration;
 
-CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION :"migration_name";
+CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION schema_migration;
 REVOKE ALL ON SCHEMA drizzle FROM PUBLIC;
-GRANT USAGE, CREATE ON SCHEMA drizzle TO :"migration_name";
+GRANT USAGE, CREATE ON SCHEMA drizzle TO schema_migration;
 ```
 
-If `drizzle` already exists, verify its owner before changing grants; `IF NOT EXISTS` does not
-correct an unexpected owner. The application identity receives no access to migration metadata.
+Before using `IF NOT EXISTS`, verify any existing `drizzle` schema owner; the statement does not fix
+wrong ownership. The runtime role receives no migration-metadata access.
 
-If the approved design uses a dedicated schema, create/own it through the migration identity instead
-of expanding `public`. The first table-bearing migration must add explicit least-privilege grants. A
-typical contract, adjusted to the approved operations, is:
+The first product schema should use a dedicated schema owned by the migration role. Its admitting
+PRD must grant only required operations:
 
 ```sql
-\set app_schema '<approved-application-schema>'
-
-GRANT USAGE ON SCHEMA :"app_schema" TO :"app_name";
+GRANT USAGE ON SCHEMA application TO application_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE
-  ON ALL TABLES IN SCHEMA :"app_schema"
-  TO :"app_name";
+  ON ALL TABLES IN SCHEMA application
+  TO application_runtime;
 GRANT USAGE, SELECT, UPDATE
-  ON ALL SEQUENCES IN SCHEMA :"app_schema"
-  TO :"app_name";
+  ON ALL SEQUENCES IN SCHEMA application
+  TO application_runtime;
 
 ALTER DEFAULT PRIVILEGES
-  FOR ROLE :"migration_name"
-  IN SCHEMA :"app_schema"
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app_name";
+  FOR ROLE schema_migration
+  IN SCHEMA application
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO application_runtime;
 ALTER DEFAULT PRIVILEGES
-  FOR ROLE :"migration_name"
-  IN SCHEMA :"app_schema"
-  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO :"app_name";
+  FOR ROLE schema_migration
+  IN SCHEMA application
+  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO application_runtime;
 ```
 
-Do not execute template grants before the schema and operations are approved. Avoid `GRANT ALL`,
-database ownership, role admin, replication, bypass-RLS, or broad `PUBLIC` grants. Future row-level
-security does not replace server-side authorization.
+Do not run these template grants before a product schema/operation set is approved. `GRANT ALL`,
+database ownership, role admin, replication, bypass-RLS, broad `PUBLIC`, or membership in Supabase
+administrator roles is prohibited.
 
-## Verify grants as administrator
+## Supabase Auth and RLS
 
-```sql
-SELECT
-  rolname,
-  rolsuper,
-  rolcreaterole,
-  rolcreatedb,
-  rolreplication,
-  rolbypassrls
-FROM pg_catalog.pg_roles
-WHERE rolname IN (:'app_name', :'migration_name');
+The current server uses a dedicated PostgreSQL runtime role after Supabase Auth verifies the
+request. No product query exists. The first table-bearing PRD must choose and test one explicit
+model:
 
-SELECT
-  has_database_privilege(:'app_name', :'db_name', 'CONNECT') AS app_connect,
-  has_database_privilege(:'app_name', :'db_name', 'CREATE') AS app_create_database_object,
-  has_database_privilege(:'migration_name', :'db_name', 'CONNECT') AS migration_connect;
+- application-owned authorization with every query constrained to the verified subject/tenant; or
+- Supabase Data API/user JWT with RLS; or
+- a reviewed combination in which RLS is defense in depth.
 
-SELECT
-  has_schema_privilege(:'app_name', 'public', 'USAGE') AS app_public_usage,
-  has_schema_privilege(:'app_name', 'public', 'CREATE') AS app_public_create,
-  has_schema_privilege(:'migration_name', 'public', 'CREATE') AS migration_public_create;
-```
+RLS never replaces server-side authorization. A direct database role must not silently bypass an RLS
+policy intended for `authenticated` users. Record how verified Auth claims become safe query scope.
 
-Expected baseline:
+## Configure protected settings
 
-- both identities can connect;
-- neither is superuser, role/database creator, replication, or bypass-RLS;
-- app can use but cannot create in the approved schema;
-- migration can create only in `public`, `drizzle`, or a later explicitly approved application
-  schema.
+### Vercel runtime
 
-Inspect `information_schema.role_table_grants`, sequence privileges, schema owners, and default
-privileges after the first schema migration. Record names and booleans, not tokens or row data.
+Use the transaction pooler values from Supabase Connect:
 
-## Verify each managed identity
+- `DATABASE_HOST` — shared/dedicated pooler host
+- `DATABASE_PORT=6543`
+- `DATABASE_NAME`
+- `DATABASE_USER` — dedicated role using the exact pooler username form shown by Supabase
+- `SUPABASE_DATABASE_PASSWORD`
+- `SUPABASE_DATABASE_ROOT_CERT`
+- `DATABASE_POOL_MAX` — `1..5`, selected against the project pool limit
 
-An administrator query is insufficient. From the actual private Container Apps identity context:
+Do not send `statement_timeout` as a transaction-pool startup parameter; Supabase's dedicated
+PgBouncer endpoint may reject it. Configure reviewed role/database timeouts server-side and keep the
+client-side query timeout bounded.
 
-1. obtain a token for `https://ossrdbms-aad.database.windows.net/.default` through the assigned
-   user-managed identity;
-2. connect with the exact PostgreSQL principal name and `verify-full`;
-3. run `SELECT current_user, current_database()` and an approved harmless query;
-4. prove the app identity cannot `CREATE TABLE`, alter schema, read migration-only objects, or
-   assume the migration role;
-5. prove the migration identity can read/apply migration metadata and the app cannot;
-6. verify token refresh with a new connection without exposing token values.
+### GitHub migration
 
-The image deliberately has no Entra-administrator SQL bootstrap or general identity-diagnostic
-command. The bundled production migration entrypoint is not an administrator bootstrap tool. Use a
-separately approved private operator image/process for these positive/negative grant checks; do not
-add `psql`, a shell, or admin capability to the lean runtime image merely for convenience.
+Use a direct or shared-session endpoint:
+
+- `SUPABASE_MIGRATION_HOST`
+- `SUPABASE_MIGRATION_PORT=5432` (fixed in workflow)
+- `SUPABASE_MIGRATION_DATABASE`
+- `SUPABASE_MIGRATION_USER` — distinct migration role and exact endpoint username form
+- `SUPABASE_MIGRATION_PASSWORD`
+- `SUPABASE_MIGRATION_ROOT_CERT`
+
+Never copy migration values into Vercel, preview values into production, or runtime values into the
+GitHub migration job.
+
+## Verify positive and negative access
+
+From the actual Vercel and protected-runner contexts, record booleans/role names only:
+
+1. Both connections use TLS with certificate verification and the intended project/region.
+2. Runtime reaches port `6543`; migration reaches port `5432`.
+3. `SELECT current_user, current_database()` matches each dedicated role.
+4. Runtime can execute only approved DML and cannot create/alter/drop objects, read `drizzle`,
+   change roles, or assume migration/admin roles.
+5. Migration can access migration metadata and approved schema DDL but cannot assume administrator
+   or runtime duties.
+6. Pool limits and transaction-mode query patterns work without named prepared/session state.
+7. Credential rotation succeeds independently for each role and old credentials fail.
+
+Do not print connection strings, passwords, certificate bodies, rows, full host/project identifiers,
+or provider errors.
 
 ## Migration execution
 
-The production path is implemented but undeployed:
+The protected workflow builds `packages/db/dist/migrate-production.mjs` and executes it only after
+environment approval. The entrypoint:
 
-- `packages/db/src/migrate-production.ts` is bundled by esbuild to
-  `packages/db/dist/migrate-production.mjs`;
-- the image copies that bundle to `/app/migration/dist/migrate-production.mjs` and copies generated
-  migrations to `/app/migration/migrations`;
-- the manual private Container Apps Job runs `node migration/dist/migrate-production.mjs` from the
-  same digest-pinned application image;
-- configuration is accepted only for `RUNTIME_MODE=production` and
-  `DATABASE_MODE=azure-managed-identity`; password mode and `DATABASE_URL` are not production
-  fallbacks;
-- the entrypoint checks `pg_try_advisory_lock` on one dedicated `PoolClient`, runs Drizzle on that
-  same PostgreSQL session, releases the advisory lock in `finally`, releases the client, and closes
-  the pool;
-- lock contention fails closed instead of waiting for or overlapping another migration, and process
-  output exposes only a bounded success/failure message.
+- accepts only the `SUPABASE_MIGRATION_*` production contract;
+- fixes one pool connection and verified TLS;
+- acquires `pg_try_advisory_lock` on one `PoolClient`;
+- runs Drizzle on that same session;
+- unlocks in `finally`, releases, and closes;
+- emits one bounded success/failure line.
 
-The staged workflow deploys only the digest-pinned job after reviewed migration what-if evidence,
-verifies its command/environment/workload identity, refuses an active or ambiguous prior execution,
-starts one run, and requires `Succeeded` evidence before application planning. The database lock is
-a second fail-closed concurrency boundary; it does not replace workflow serialization.
+Never run it during pnpm install, Next.js/Vercel build, preview deployment, application startup, or
+an unprotected local/CI task.
 
-Before first authorized use, review generated SQL, set statement/lock timeouts and retry behavior
-appropriate to the migration, prove PostgreSQL principals/grants from actual workload identities,
-approve redacted evidence retention, and confirm expand/migrate/contract compatibility.
+## Rotation and recovery
 
-Never run migration from install, Next.js build, image build, web startup, or a public runner.
-
-## Failure and recovery
-
-- Principal creation failure: stop; verify Entra admin, private DNS, object ID/type, and extension
-  support. Do not enable password auth.
-- Wrong OID mapping: revoke access and investigate; do not delete a production role until ownership
-  and dependencies are understood.
-- Grant failure: roll back only grants from the current reviewed transaction where safe; preserve
-  evidence and do not grant broader privileges as a workaround.
-- Advisory lock unavailable: stop; identify the other approved session/execution. Do not change the
-  lock key, disable the check, or terminate an unknown session to force progress.
-- Migration failure: stop rollout, preserve backward-compatible app/schema state, repair forward, or
-  invoke the separately approved restore plan.
-- Identity compromise: disable/revoke the managed identity assignment and SQL principal access,
-  investigate tokens/logs, then re-bootstrap a replacement identity through IaC and reviewed SQL.
-
-## No portal or ad hoc SQL drift
-
-The Entra administrator, identities, network, and Azure RBAC remain in Bicep/reviewed identity
-automation. SQL principal/grant statements must be versioned with the admitting persistence change
-or captured as immutable approved execution evidence. Portal query editors and undocumented manual
-grants are prohibited. Emergency SQL requires an incident, approver, exact statement/evidence,
-expiry, and reconciliation.
+- Rotate runtime and migration credentials separately with an overlap procedure and negative test.
+- On compromise, revoke the affected role credential/sessions, inspect approved logs, and update
+  only that duty's protected setting.
+- Migration failure stops promotion; repair forward.
+- A database restore/PITR requires separate approval, known backup geography/age, write
+  reconciliation, and compatibility verification. No restore procedure is currently approved.

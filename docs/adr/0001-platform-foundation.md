@@ -1,9 +1,12 @@
 # ADR-0001: Platform foundation
 
-- **Status:** Accepted for the repository foundation; not production approval
+- **Status:** Superseded on the Vercel/Supabase template branch by ADR-0002
 - **Date:** 2026-07-26
 - **Decision owners:** Repository maintainers
 - **Scope:** Product-neutral bootstrap
+
+This record remains the decision history for the Azure Container Apps variant. It is not the active
+deployment decision on the Vercel/Supabase template branch.
 
 ## Context
 

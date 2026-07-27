@@ -10,16 +10,11 @@ describe("database server-only boundary", () => {
     await expect(import("../src/pool")).rejects.toThrow(serverOnlyError);
   });
 
-  it("poisons the public token module outside a server component graph", async () => {
-    await expect(import("../src/token-provider")).rejects.toThrow(serverOnlyError);
-  });
-
   it("poisons the public schema module outside a server component graph", async () => {
     await expect(import("../src/schema/index")).rejects.toThrow(serverOnlyError);
   });
 
   it("does not export the Node-safe implementation modules", () => {
     expect(() => require.resolve("@repo/db/internal/pool")).toThrow("Package subpath");
-    expect(() => require.resolve("@repo/db/internal/token-provider")).toThrow("Package subpath");
   });
 });

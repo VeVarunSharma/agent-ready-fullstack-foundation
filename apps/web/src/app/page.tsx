@@ -1,14 +1,22 @@
 import { Button } from "@repo/ui/components/button";
 import { ThemeToggle } from "@repo/ui/components/theme";
+import { loadServerEnvironment } from "@repo/env/server";
+
+import { SignOutButton } from "#components/sign-out-button";
 
 export const dynamic = "force-dynamic";
 
 export default function Home() {
+  const authenticationEnabled = loadServerEnvironment().AUTH_MODE === "supabase";
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-6 sm:px-10 sm:py-8">
       <header className="border-border flex items-center justify-between gap-4 border-b pb-5">
         <p className="text-sm font-semibold tracking-tight">Application foundation</p>
-        <ThemeToggle />
+        <div className="flex items-center gap-3">
+          {authenticationEnabled ? <SignOutButton /> : null}
+          <ThemeToggle />
+        </div>
       </header>
 
       <section className="flex flex-1 flex-col justify-center py-16 sm:py-24">

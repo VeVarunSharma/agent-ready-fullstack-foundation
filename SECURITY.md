@@ -1,85 +1,69 @@
 # Security
 
-> **Not yet production configured.** This repository contains a tested local foundation and
-> offline-compiled Azure scaffolding. It represents no deployed Azure environment, approved identity
-> audience, production data, completed residency review, or production authorization.
+> **Not production configured.** No Vercel, Supabase, GitHub protected environment, Azure resource,
+> identity audience, production data, recovery plan, or residency approval is evidenced.
 
-The [repository constitution](CONSTITUTION.md) is binding. This document points to operational
-security sources instead of reproducing it.
+The [repository constitution](CONSTITUTION.md) is binding.
 
 ## Report a vulnerability
 
-Do not disclose a suspected vulnerability in a public issue, discussion, pull request, log, or test
-artifact.
+Do not disclose a suspected vulnerability in a public issue, pull request, log, deployment preview,
+Supabase table, or test artifact. Use the repository host's private vulnerability-reporting feature
+when configured, otherwise an approved private organizational channel. Include affected
+version/path, minimal synthetic reproduction, expected/observed behavior, likely impact, and a
+secure contact.
 
-Use the repository host's private vulnerability-reporting feature when it is configured. Until a
-private reporting route and response SLA are published, contact the repository owners through an
-approved private organizational channel. Include:
+Do not test a Vercel, Supabase, or Azure environment without explicit authorization.
 
-- the affected path/version and prerequisite access;
-- a minimal reproduction without real customer data or credentials;
-- observed and expected behavior;
-- likely impact and suggested containment;
-- a secure way to coordinate follow-up.
+## Implemented safeguards
 
-Do not test against or provision Azure resources without explicit authorization.
+- Strict environment schemas reject incomplete production modes, local credentials in production,
+  database URLs, administrator/default database roles, unverified TLS, service-role keys, migration
+  secrets in Vercel, HTTP callback origins, and disabled production authentication.
+- Supabase Auth clients use only the project URL and publishable key. Proxy validates `getClaims()`,
+  propagates refreshed cookies/cache headers, and never trusts `getSession()` as identity.
+- Invite-only email/password login sends credentials directly from the browser to Supabase, returns
+  one fixed credential rejection, validates relative return paths, and never sends credentials to
+  application code/logs.
+- Production Supabase cookies are `Secure`, `SameSite=Lax`, and path `/`; Proxy verifies claims and
+  preserves refresh cookie/cache headers.
+- Runtime PostgreSQL uses a dedicated role, transaction endpoint `6543`, bounded pool, and verified
+  root certificate. Migration uses a distinct role and port `5432` session.
+- Drizzle production migration holds a nonblocking advisory lock on the same `PoolClient`, unlocks
+  in `finally`, and never runs during install/build/startup.
+- oRPC/Zod contracts, safe envelopes, opaque correlation IDs, no-store responses, and strict
+  TypeScript protect the JSON boundary.
+- Pino accepts fixed events and allowlisted fields only; credentials, cookies, email, bodies, URLs,
+  SQL, prompts, provider errors, and unrestricted text are prohibited.
+- Semantic tokens, visible focus, labels/status text, reduced motion, and Playwright/axe checks
+  cover the neutral UI and Auth form.
+- Exact stable dependencies, lockfile policy, SHA-pinned workflow actions, CodeQL, and deterministic
+  checks protect the source path.
+- Provider-boundary Bicep compiles to zero resources and tests that Foundry, Azure Monitor export,
+  and Azure runtime access remain disabled.
 
-## Current security posture
+## Scaffolded-disabled or external
 
-### Implemented locally
+- Vercel project/root setting, custom domains, regions, production-domain assignment, Deployment
+  Checks, protection, log settings, and rollback controls.
+- Supabase project/region, public-signup denial, password/recovery/MFA policy, optional notification
+  email, asymmetric signing keys, provisioning, rate/lockout/CAPTCHA, session lifetime, database
+  roles, network restrictions, backups, PITR, and restore.
+- GitHub `production` environment, reviewers, branch rules, migration secrets, and selection of the
+  stable migration job as a Vercel Deployment Check.
+- Azure Monitor export, Vercel Log Drain, collector, Application Insights, and all Azure resources.
+- Vercel-to-Azure OIDC federated credentials and RBAC; no Azure consumer currently exists.
+- Foundry account/project/model/agent/data plane; the boundary is false-only.
 
-- Strict environment schemas reject invalid production modes and static production database
-  passwords.
-- oRPC v1/Zod contracts, safe error envelopes, opaque correlation IDs, and no-store response headers
-  protect the implemented health API boundary.
-- A server-only Container Apps principal parser rejects malformed encoding, payloads, issuers, and
-  required claims. It does not grant authorization.
-- PostgreSQL access has explicit local-password and `azure-managed-identity` modes. Hosted mode uses
-  `ManagedIdentityCredential` and refreshable tokens. The production migration bundle takes a
-  same-session PostgreSQL advisory lock before Drizzle runs and fails closed on contention.
-- Structured logging uses fixed event names and allowlisted fields; sensitive request data is not
-  accepted by the logger. The prohibited Vercel instrumentation package is absent.
-- The UI has semantic light/dark tokens, visible focus, reduced-motion handling, and hardcoded-color
-  enforcement.
-- Next.js applies security headers. CSP is report-only pending nonce and safe-reporting work
-  described in [Architecture](ARCHITECTURE.md#content-security-policy-strategy).
-- Dependency versions and the lockfile are exact; deterministic checks prove no resolved
-  semver-prerelease packages. ESLint 9 is the deliberate newest peer-compatible stable line, and
-  shadcn-generated files are retained without a shadcn CLI dependency.
-- Specification validation fails closed for functional source/configuration/IaC/workflow/Copilot
-  changes, including deletions and both rename paths, unless the same change has an active/current
-  cataloged PRD.
-- The manual delivery definition seals source/config/image evidence, promotes only a proven ACR
-  digest, reviews and rechecks same-run what-if state, requires migration success before candidate
-  traffic, and verifies rollback posture. This is repository logic, not evidence of a cloud run.
-- Production preflight rejects synthetic/placeholder identifiers and domains, unresolved monitoring,
-  public data planes, an incorrect migration command, and Foundry enablement.
+External configuration is not an active control until separately evidenced.
 
-### Scaffolded-disabled
+## Not defined
 
-- Regional Application Gateway WAF v2, internal Container Apps, private endpoints/DNS, Entra-only
-  PostgreSQL, private ACR/Key Vault, regional Log Analytics, Application Insights/AMPLS, managed
-  identities, and narrow Azure RBAC are modeled in Bicep.
-- Container Apps built-in authentication is parameterized but has no approved provider values.
-- Container Apps JSON stdout/diagnostic routing targets private regional Log Analytics when
-  explicitly approved. Application Insights/AMPLS remain scaffolded-disabled; no connection string,
-  DCE, DCR, or application trace export is admitted.
-- Foundry is a false-only, nondeployable boundary. It declares no disabled resources, DNS, RBAC,
-  data-plane requirements, model, or agent.
-- Checked-in production configuration is deliberately rejected by offline preflight.
-- Manual delivery definitions separate what-if, registry push, infrastructure deployment, and
-  migration/runtime rollout OIDC identities. The protected environment, four federated credentials,
-  least-privilege Azure RBAC, and private-runner controls are external and unproved.
+There is no self-service signup, social identity provider, user profile, product role, permission,
+authorization policy, product table, RLS policy, customer data, Supabase Storage/Realtime/Edge
+Function, on-call/SLA, disaster recovery objective, multi-region failover, or Foundry behavior.
 
-Compiled infrastructure is not an active control.
-
-### Not defined
-
-There is no product behavior, authorization policy, user model, production database schema,
-production deployment, on-call/SLA, disaster recovery objective, Foundry model/agent, or approved
-customer-data flow.
-
-## Canonical security records
+## Canonical records
 
 - [Data classification](docs/security/DATA_CLASSIFICATION.md)
 - [Data residency](docs/security/DATA_RESIDENCY.md)
@@ -90,40 +74,40 @@ customer-data flow.
 - [Deployment](docs/runbooks/deployment.md)
 - [Foundry readiness](docs/architecture/FOUNDRY_READINESS.md)
 
-Unknown customer data is Restricted. Unknown region, retention, replication, support, identity, or
-network behavior blocks production use.
-
-## Security requirements for change
-
-Before implementation, a functional change needs an active/current cataloged PRD in the same change.
-The validator covers source, manifests, lockfiles, configuration, styles, IaC, workflows, Copilot
-instructions/skills, unknown paths, deletions, and both sides of renames. The same change must:
-
-1. classify new data and minimize collection;
-2. validate each new trust-boundary input and allowlist output/errors;
-3. define authentication and server-side, deny-by-default authorization separately;
-4. record processing, storage, telemetry, backup, deletion, support, and control-plane locations;
-5. use managed identity and least privilege where supported;
-6. keep credentials and Azure SDKs server-only and secrets out of source/settings;
-7. update architecture, threat, residency, logging, migration, and runbook records selected by
-   impact;
-8. add deterministic evidence and any separately authorized environment verification.
-
-Security controls may not be replaced by a document, WAF rule, UI condition, or successful compile.
+Unknown customer data is Restricted. Unknown region, replication, backup, retention, deletion,
+support, identity, or recovery behavior blocks production use.
 
 ## Secrets and credentials
 
-- Never commit a token, password, private key, certificate, connection string, real tenant/client
-  identifier, or secret-shaped placeholder.
-- Production database passwords and production `DATABASE_URL` values are prohibited.
-- A required OIDC client credential must be a versioned Key Vault reference. Application Gateway
-  certificate material also remains in Key Vault.
-- GitHub-to-Azure delivery uses OIDC/workload identity federation, not a client secret.
-- Local credentials are clearly local, live outside tracked files, and must never be reused.
-- Suspected exposure requires immediate private reporting, revocation/rotation, log and artifact
-  review, and documented follow-up.
+- Never commit or print a token, password, private key, certificate, cookie, connection string, real
+  project/tenant identifier, or secret-shaped placeholder.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` is the only Supabase key allowed in browser code. A legacy
+  anon key may be migrated externally, but this template requires the modern publishable-key format.
+- Supabase legacy service-role and modern `sb_secret_` keys are prohibited from application and
+  migration configuration, including public-prefixed environment names.
+- Vercel receives only its dedicated runtime database role password and root certificate through
+  encrypted environment settings.
+- GitHub receives only its distinct migration role password and root certificate through the
+  protected `production` environment.
+- `DATABASE_URL` is prohibited. Separate fields prevent accidental URL logging and force explicit
+  pool/TLS behavior.
+- Runtime and migration roles must not be `postgres`, `supabase_admin`, `service_role`, `anon`, or
+  `authenticated`; they must not share a credential.
+- Rotate/revoke provider credentials on a named schedule and immediately after suspected exposure.
+- Future Vercel-to-Azure access uses OIDC federation, not an Azure client secret.
 
-## Supported versions
+Supabase PostgreSQL's password requirement is the narrow provider exception recorded in Constitution
+2.0.0. It does not authorize committed, shared, administrator, URL-shaped, or cloud-management
+credentials.
 
-There is no released product or production service. Security fixes apply to the current repository
-state only; no support window is promised until releases and owners are defined.
+## Change requirements
+
+Every functional change needs an active/current cataloged PRD. The same change must classify data,
+validate trust-boundary inputs, separate authentication from authorization, record every processor
+and location, use least privilege, keep secrets server-only, update selected architecture/security
+records, and add deterministic evidence.
+
+The first product persistence change must add schema and generated migration together, define
+runtime/migration grants, decide how Supabase RLS complements application authorization, and
+preserve expand/migrate/contract compatibility. The first new Auth field/provider must update
+enumeration, CSRF, redirect, session, recovery, telemetry, and data-residency analysis.

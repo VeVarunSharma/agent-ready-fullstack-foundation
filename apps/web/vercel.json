@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm install --global corepack@0.35.0 && corepack enable && corepack prepare pnpm@11.17.0 --activate && cd ../.. && pnpm install --filter @repo/web... --frozen-lockfile --strict-peer-dependencies",
+  "buildCommand": "cd ../.. && test \"$(pnpm --version)\" = \"11.17.0\" && node -e \"if (process.versions.node.split('.')[0] !== '24') process.exit(1)\" && pnpm turbo run build --filter=@repo/web"
+}

@@ -1,226 +1,139 @@
 # Identity bootstrap
 
-This runbook defines the unresolved identity decisions and verification required before the
-scaffolded Container Apps authentication boundary can be used.
+This runbook configures the external Supabase Auth boundary used by the Vercel application and
+records the future Vercel-to-Azure OIDC rule. It does not authorize a live project.
 
-> No identity provider, audience, tenant, application registration, secret, callback domain, allowed
-> identity, or Azure resource is configured. Do not execute cloud steps without separate
-> authorization.
+> No Supabase project, user, password policy, recovery process, email provider, Vercel domain, or
+> Azure federated identity is configured.
 
 ## Responsibility split
 
-| Layer                                  | Responsibility                                                                                                             |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Application Gateway                    | Public TLS/WAF, approved public host/scheme forwarding, removal of inbound platform identity headers, private backend path |
-| Container Apps built-in authentication | OIDC redirect, token validation, nonce/cookie handling, admitted identity policy, trusted principal-header injection       |
-| Application principal normalizer       | Strictly decode and validate header shape, HTTPS issuer, subject, and name identifier                                      |
-| Application authorization              | Decide each permitted action server-side and deny absent/malformed/unknown/insufficient principals                         |
-| OIDC/Entra tenant                      | Identity lifecycle, credential/app registration, MFA/conditional access, sign-in/audit, token issuance                     |
+| Layer                | Responsibility                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Vercel               | HTTPS/domain, request routing, environment isolation, deployment protection          |
+| Supabase Auth        | User/password/session lifecycle, token issuance/signing/refresh/revoke, Auth logs    |
+| Sign-in UI           | Direct credential submission to Supabase and fixed nonenumerating application errors |
+| Next.js Proxy        | Request-scoped cookie refresh and verified `getClaims()` authentication              |
+| Application handlers | Product authorization, record/tenant scope, deny-by-default decisions                |
+| Future Entra/Azure   | Exchange Vercel OIDC assertion for an approved Azure resource token                  |
 
-The implemented normalizer is not authentication by itself and no application authorization policy
-exists.
+Authentication does not grant product permission. No product authorization exists.
 
-## Delivery identity separation
+## Supabase Auth prerequisites
 
-Application/provider identity, Azure workload managed identities, and GitHub delivery identities are
-different trust domains. The manual workflows require four distinct UUID-shaped client IDs:
+- Separate nonproduction and production Supabase projects and approved regions
+- Exact Vercel preview/production origins and custom-domain ownership
+- Supabase organization access, MFA, administrator roles, audit/support policy
+- Asymmetric JWT signing keys and rotation/revocation policy
+- Public signup disabled and an approved account provisioning/deprovisioning process
+- Password strength, breach protection, reset/recovery, lockout/rate limit, CAPTCHA, and MFA
+  decisions
+- Custom SMTP/notification path if invitations or recovery email are used
+- Session lifetime, refresh reuse/revocation, cookie behavior, incident response
+- Classification/residency/retention/deletion approval for email/user/session records
 
-| Protected variable                  | Narrow delivery duty                                                                                        |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `AZURE_WHAT_IF_CLIENT_ID`           | ARM read/what-if and sanitized plan evidence for foundation, migration, and application stages              |
-| `AZURE_REGISTRY_PUSH_CLIENT_ID`     | Private ACR publication, digest proof, and tag/manifest immutability operations only                        |
-| `AZURE_INFRA_DEPLOY_CLIENT_ID`      | Create/update only the reviewed foundation, migration-job, and inactive-application IaC stages              |
-| `AZURE_MIGRATION_RUNTIME_CLIENT_ID` | Start/inspect migration execution; inspect/shift/restore revisions and ingress; query rollout Log Analytics |
+## Project URL and keys
 
-The workflow rejects reused client IDs and binds all four IDs, tenant, subscription, source,
-configuration, template, image digest, and same-run what-if evidence through the artifact chain. The
-monitoring query client ID in production configuration must equal the migration/runtime client ID.
-That delivery identity never becomes the PostgreSQL principal; the Container Apps Job obtains its
-database token through the separately assigned migration managed identity.
+Configure only:
 
-These workflows do **not** create the GitHub protected `production` environment, federated identity
-credentials, identity objects, or all role grants. Environment administrators must separately prove:
+- `NEXT_PUBLIC_SUPABASE_URL` — exact project HTTPS origin
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — modern `sb_publishable_...` key
+- `APPLICATION_ORIGIN` — exact Vercel production HTTPS origin
+- `NEXT_PUBLIC_RUNTIME_MODE=production`
 
-1. required reviewers and default-branch protection for the exact environment/workflow trust;
-2. one narrowly matched FIC per client identity, with the intended GitHub issuer/audience/subject
-   and no pull-request or fork trust;
-3. least-privilege ARM and native data-plane roles at the smallest scope for each duty, with
-   explicit denial of the other three duties;
-4. an isolated, patched, ephemeral/cleaned `production-vnet-runners` pool whose labels are protected
-   and whose private DNS/routes reach only approved Azure paths;
-5. audit, rotation/revocation, incident, and break-glass ownership.
+The publishable key is browser-visible by design and relies on Auth controls plus future database
+authorization/RLS. It is not a secret. Legacy service-role, modern `sb_secret_`, JWT-signing,
+management, and database keys are prohibited from browser/application Auth configuration.
 
-Tokenless acceptance can use the pinned GitHub-hosted runner, but it has no `id-token: write`. Every
-job that logs into Azure, including what-if and monitoring query, requires the protected
-VNet-connected runner. A label, workflow file, or UUID alone is not evidence of any external
-control.
+## Sign-in contract
 
-## Admission prerequisites
+`/auth/login` renders one email/password form:
 
-- A cataloged PRD identifies the user audience and data classification.
-- The decision chooses workforce Microsoft Entra, Entra External ID, or another custom OIDC
-  provider.
-- Identity/security/privacy owners approve tenant/provider geography, terms, claims, support access,
-  logs, retention, and deletion.
-- The public DNS host and certificate lifecycle are approved.
-- Application Gateway is the only reachable app ingress.
-- Identity tenant objects are represented by reviewed automation or an approved immutable
-  configuration source. Portal-only creation or edits are prohibited.
-- Production preflight, protected OIDC workflow, private delivery path, and operator duties are
-  approved.
+1. The browser validates bounded input and calls `signInWithPassword` directly against the
+   configured Supabase project.
+2. The application displays one fixed rejection for every credential failure and a separate fixed
+   availability message only for rate/provider/server failure.
+3. Raw provider messages, user records, email, and password are never sent to the application server
+   or logger.
+4. On success, the browser returns to the server-validated relative `next` path and refreshes the
+   application.
 
-## Resolve configuration
+Production acceptance must prove Supabase itself uses indistinguishable HTTP status/body and
+operationally acceptable timing for an unknown email and a known email with a wrong password. UI
+masking alone is not sufficient. If the provider configuration cannot meet that condition, stop and
+select a provider-level nonenumerating flow in a new PRD.
 
-Record these values without committing production identifiers:
+Public/self-service signup stays disabled. The repository has no signup, password reset, recovery,
+email-change, MFA enrollment, or account-management route. Those flows must be admitted and tested
+before a real audience depends on them; until then, provisioning/recovery is an external production
+blocker.
 
-| Configuration                         | Decision                                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `auth.provider`                       | `microsoftEntra` or `customOidc`                                                           |
-| `auth.issuer`                         | Exact HTTPS issuer; tenant-specific for Entra                                              |
-| `auth.audience`                       | Token audience accepted by this application only                                           |
-| `auth.tenantId`                       | Approved tenant UUID                                                                       |
-| `auth.clientId`                       | OIDC application/client UUID                                                               |
-| `auth.clientSecretKeyVaultUrl`        | Versioned Key Vault secret URL when a confidential client credential is required           |
-| `auth.allowedIdentities`              | Explicitly admitted object/subject identifiers; at least one required by current preflight |
-| `auth.allowedClientApplications`      | Explicit client allowlist or reviewed empty-set semantics                                  |
-| `auth.allowedGroups`                  | Explicit group allowlist or reviewed empty-set semantics                                   |
-| `auth.callbackUrls`                   | HTTPS callbacks/allowed redirects on the public host only                                  |
-| `dns.publicHost` / `dns.callbackHost` | Same approved Application Gateway host                                                     |
-| `auth.forwardedHostTrustApproved`     | Approval evidence after the forwarding design is verified                                  |
-| Cookie/nonce/scopes/name claim        | Minimum values for the selected provider and audience                                      |
+## Runtime session contract
 
-Do not use a multitenant/common issuer unless an approved architecture and authorization design
-constrains tenants and issuers explicitly.
+- `src/proxy.ts` excludes only Next.js framework assets/favicon; exact login/health paths return
+  before creating a Supabase client.
+- Protected requests create one server client per request and call `getClaims()`.
+- `getSession()` may retrieve tokens when explicitly needed but is never identity/authorization
+  proof.
+- Supabase cookies use `SameSite=Lax`, path `/`, and `Secure` in production.
+- Refreshed request/response cookies and cache-prevention headers remain synchronized.
+- Missing/invalid claims redirect pages to `/auth/login`; protected APIs receive an empty `401`.
+- `/auth/login`, `/health/*`, and `/api/v1/health` are the only current public protocol surfaces.
+- A requested return path must start with one `/`, contain no backslash/control character, and never
+  become another origin.
+- Cookie/token/provider/password/email detail never enters application logs.
 
-## Callback and logout contract
+Review Supabase cookie names, HttpOnly exposure constraints, refresh-token reuse protection,
+sign-out scope, session revocation, and Vercel caching in the configured environment.
 
-Use only the external HTTPS origin:
+## User lifecycle
 
-- Entra callback/reply URL: `https://<public-host>/.auth/login/aad/callback`
-- Custom OIDC callback/reply URL:
-  `https://<public-host>/.auth/login/<custom-provider-name>/callback`
-- Container Apps logout endpoint: `https://<public-host>/.auth/logout`
-- Any provider post-logout or `post_logout_redirect_uri` value must also be an explicitly registered
-  HTTPS URL on `<public-host>`.
+Before production, define and test:
 
-Verify the exact provider-specific callback emitted by Container Apps against current Microsoft
-documentation and the deployed auth configuration. `auth.callbackUrls` in Bicep also feeds allowed
-external redirects; do not treat that property alone as proof that the provider registration is
-correct. Wildcard, HTTP, internal Container Apps FQDN, and unapproved alternate-host callbacks are
-prohibited.
+- who may create/invite, approve, suspend, delete, and recover an account;
+- how initial passwords are delivered without support/operator disclosure;
+- password strength/breach/rotation/reset policy and MFA requirement;
+- duplicate/alias/domain and email-change policy;
+- session revocation on removal/incident;
+- Auth user/log/notification deletion and retention;
+- support identity verification and anti-social-engineering controls;
+- audit evidence without email/token/password disclosure.
 
-## Application Gateway trust contract
+No application `users` table or profile exists. A future product user model requires its own PRD,
+classification, schema/migration, reconciliation key, authorization, deletion, and audit design.
 
-The current Bicep intends to:
+## Verification
 
-1. listen only on the approved public host over HTTPS;
-2. connect to the internal Container App FQDN over HTTPS with certificate-chain, expiry, and SNI
-   validation;
-3. overwrite `X-Forwarded-Host` with `<public-host>`;
-4. overwrite `X-Forwarded-Proto` with `https`;
-5. clear inbound `X-MS-CLIENT-PRINCIPAL`, `X-MS-CLIENT-PRINCIPAL-ID`, and
-   `X-MS-CLIENT-PRINCIPAL-NAME`;
-6. restrict app ingress to the Application Gateway subnet;
-7. let Container Apps authentication inject its own trusted principal header after gateway
-   processing.
+In an authorized nonproduction environment:
 
-Container Apps auth uses the `Standard` forward-proxy convention. Never trust a forwarded or
-platform identity header on a route reachable outside this chain. Do not weaken the app IP
-restriction or expose a second direct host for troubleshooting.
+1. Confirm exact project URL, publishable key type, application origin, public-signup disabled, and
+   asymmetric signing keys.
+2. Prove an approved account can sign in and an unapproved account cannot be created.
+3. Compare unknown-user and wrong-password provider status/body/timing for enumeration resistance.
+4. Prove malformed input and unsafe return paths do not contact Supabase or leave the application
+   origin.
+5. Prove unauthenticated root redirects, protected API returns `401`, health remains independent,
+   and a verified session reaches the neutral shell.
+6. Inspect production cookies for Secure/SameSite/path and verify refresh/revoke/expiry/sign-out.
+7. Exercise rate-limit/lockout/provider outage without raw provider detail or local bypass.
+8. Inspect approved Vercel/Supabase logs for absence of password/cookie/token and application logs
+   for absence of email.
+9. Record booleans/timestamps/config references only; never copy credentials, JWTs, cookies, email,
+   user records, keys, or raw provider responses.
 
-## Key Vault credential reference
+## Future Vercel-to-Azure identity
 
-If the selected OIDC client requires a secret:
+No Azure consumer exists. A future PRD may use Vercel OIDC federation only:
 
-1. generate it through approved identity-tenant automation;
-2. place it directly in the deployment Key Vault through an approved bootstrap path;
-3. pass only a versioned URL of the form `https://<vault>.vault.azure.net/secrets/<name>/<version>`;
-4. grant the app managed identity only Key Vault Secrets User at the vault/currently narrower
-   practical scope;
-5. record owner, expiry, overlap rotation, revocation, and recovery;
-6. confirm the value never appears in Git, workflow inputs/output, ARM deployment history, Container
-   Apps plain settings, or logs.
+1. Create a distinct user-assigned managed identity/app registration for each required environment
+   or duty.
+2. Trust Vercel issuer `https://oidc.vercel.com/<team>` (or explicitly approved global mode).
+3. Match the exact subject
+   `owner:<team>:project:<project>:environment:<preview|production|development>`.
+4. Use audience `api://AzureADTokenExchange`.
+5. Grant only the selected Azure service/data action at the narrowest scope.
+6. Use `@vercel/oidc` plus Azure `ClientAssertionCredential` in server-only request code.
+7. Verify wrong team/project/environment/audience/subject and preview-to-production access fail.
 
-Prefer certificate/federated client authentication when the selected provider and Container Apps
-feature support it and a later review approves the lifecycle. “Passwordless production” does not
-mean an OIDC confidential client can omit a provider-required credential.
-
-## Offline validation
-
-From the repository root:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm infra:validate
-node infra/scripts/preflight.mjs \
-  --config infra/environments/production.config.json \
-  --expect-failure
-```
-
-The checked-in production fixture must fail. For a real candidate, use the approved external
-configuration path and run the same script without `--expect-failure`. Never replace the checked-in
-fixture with production identifiers.
-
-Preflight verifies shape and fail-closed decisions; it cannot verify tenant ownership, redirect
-registration, token claims, header ordering, or actual ingress isolation.
-
-## Manual OIDC what-if
-
-After offline approval:
-
-1. Use only the protected manual infrastructure-plan workflow.
-2. Authenticate to Azure with GitHub workload identity federation; no client secret.
-3. Bind the federated subject to the exact repository, workflow/ref, and protected environment.
-4. Run preflight before login/what-if and review every auth config, Key Vault reference, role
-   assignment, ingress rule, DNS/TLS value, and public-access property.
-5. Save the reviewed what-if evidence in the approved system without tokens or secret values.
-6. Stop on replacement, public exposure, unexpected tenant/resource, or ignored change.
-
-What-if is read-only planning, not permission to deploy.
-
-## Post-deployment verification
-
-Run only in an authorized nonproduction environment before production acceptance.
-
-1. Query the resource/auth configuration read-only and compare it to Bicep and approved inputs.
-2. Confirm public access reaches Application Gateway and the Container App is not directly
-   reachable.
-3. Send an arbitrary forged `X-MS-CLIENT-PRINCIPAL` header to the public host. It must not
-   authenticate or reach the app as a trusted principal.
-4. Request `/` without authentication and confirm the selected provider redirect uses the exact
-   public HTTPS host and expected issuer/client.
-5. Complete login with each allowed identity class and confirm Container Apps injects a header the
-   normalizer accepts.
-6. Test an unlisted identity, wrong tenant/issuer/audience, malformed token/header, replay/expired
-   token, and direct backend request; all must fail closed.
-7. Confirm health routes expose no identity detail and the platform exclusion is intentional.
-8. Exercise logout and post-logout redirect; confirm cookies are cleared and no alternate host is
-   accepted.
-9. Inspect only allowlisted telemetry. Tokens, cookies, claims, full URLs/query strings, and
-   principal headers must be absent.
-10. Record issuer/audience/claim evidence without copying token values.
-
-There is no product-protected route yet. The first product PRD must add authorization tests that
-prove authenticated-but-unapproved principals are denied.
-
-## Runtime/IaC contract verification
-
-The current IaC and runtime agree on `RUNTIME_MODE=production`,
-`DATABASE_MODE=azure-managed-identity`, `AUTH_MODE=container-apps`, `LOGGING_MODE=json`, and
-`TELEMETRY_MODE=disabled`, plus the required database host/port/name/user and assigned
-`AZURE_CLIENT_ID`. The staged workflow reads the deployed candidate/job and rejects a mismatch,
-`DATABASE_PASSWORD`, `APPLICATIONINSIGHTS_CONNECTION_STRING`, or OTLP endpoint before migration or
-traffic.
-
-Continue comparing every Container Apps value with
-[`packages/env/src/schemas.ts`](../../packages/env/src/schemas.ts) in the same governed change. Do
-not loosen validation or introduce a second spelling/default to work around readiness.
-
-## No portal drift
-
-- Do not create/edit app registrations, redirect URIs, secrets, auth config, role assignments, or
-  ingress settings only in a portal.
-- Emergency changes need an incident record, named approver, expiry, and immediate reconciliation in
-  reviewed automation/IaC before normal operation resumes.
-- Read-only portal/API inspection may collect evidence after separate authorization; it is not a
-  configuration source.
+Azure client secrets, wildcard subjects, shared environment identities, broad Owner/Contributor, and
+dormant credentials are prohibited. This future setup does not by itself authorize Foundry.

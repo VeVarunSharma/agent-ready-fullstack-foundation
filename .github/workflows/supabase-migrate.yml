@@ -1,0 +1,105 @@
+name: Supabase production migration
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN SUPABASE MIGRATIONS exactly.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migration
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  migrate:
+    name: Supabase production migration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Guard a manual migration request
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          SELECTED_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          test "$SELECTED_REF" = "refs/heads/$DEFAULT_BRANCH" || {
+            echo "::error::Production migrations are restricted to the default branch."
+            exit 1
+          }
+          test "$CONFIRMATION" = "RUN SUPABASE MIGRATIONS" || {
+            echo "::error::The production migration confirmation did not match."
+            exit 1
+          }
+
+      - name: Check out reviewed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install exact pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.17.0
+          run_install: false
+
+      - name: Set up exact Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Verify exact source and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(node --version)" = "v$(cat .node-version)"
+          test "$(pnpm --version)" = "11.17.0"
+
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile --strict-peer-dependencies
+
+      - name: Validate migration source and bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm deps:audit
+          pnpm --filter @repo/env --fail-if-no-match typecheck
+          pnpm --filter @repo/db --fail-if-no-match lint
+          pnpm --filter @repo/db --fail-if-no-match typecheck
+          pnpm --filter @repo/db --fail-if-no-match test:unit
+          pnpm --filter @repo/db --fail-if-no-match build:migration
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+      - name: Apply reviewed Supabase migrations
+        env:
+          RUNTIME_MODE: production
+          SUPABASE_MIGRATION_HOST: ${{ secrets.SUPABASE_MIGRATION_HOST }}
+          SUPABASE_MIGRATION_PORT: "5432"
+          SUPABASE_MIGRATION_DATABASE: ${{ secrets.SUPABASE_MIGRATION_DATABASE }}
+          SUPABASE_MIGRATION_USER: ${{ secrets.SUPABASE_MIGRATION_USER }}
+          SUPABASE_MIGRATION_PASSWORD: ${{ secrets.SUPABASE_MIGRATION_PASSWORD }}
+          SUPABASE_MIGRATION_ROOT_CERT: ${{ secrets.SUPABASE_MIGRATION_ROOT_CERT }}
+        run: pnpm db:migrate:production

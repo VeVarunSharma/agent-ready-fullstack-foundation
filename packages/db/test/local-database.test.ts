@@ -19,13 +19,13 @@ describe("local PostgreSQL tooling configuration", () => {
       loadLocalDatabaseConfiguration({
         DATABASE_HOST: "postgres",
         DATABASE_PORT: "55432",
-        DATABASE_PASSWORD: "ci-local-only",
+        DATABASE_PASSWORD: "ci-local-only-password",
       }),
     ).toMatchObject({
       mode: "local-password",
       host: "postgres",
       port: 55_432,
-      password: "ci-local-only",
+      password: "ci-local-only-password",
     });
   });
 

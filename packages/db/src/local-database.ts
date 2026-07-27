@@ -19,6 +19,7 @@ export function loadLocalDatabaseConfiguration(
     throw new Error("Local database tooling requires explicit local password mode.");
   }
 
+  const runtimeMode = environment.RUNTIME_MODE ?? "local";
   const parsedEnvironment = parseServerEnvironment({
     ...environment,
     AUTH_MODE: environment.AUTH_MODE ?? "disabled",
@@ -30,8 +31,10 @@ export function loadLocalDatabaseConfiguration(
     DATABASE_PORT: environment.DATABASE_PORT ?? String(localDatabaseDefaults.port),
     DATABASE_PROBE_TIMEOUT_MS: environment.DATABASE_PROBE_TIMEOUT_MS ?? "2000",
     DATABASE_USER: environment.DATABASE_USER ?? localDatabaseDefaults.user,
+    HOST_MODE: environment.HOST_MODE ?? "local",
     LOGGING_MODE: environment.LOGGING_MODE ?? "json",
-    RUNTIME_MODE: environment.RUNTIME_MODE ?? "local",
+    NEXT_PUBLIC_RUNTIME_MODE: environment.NEXT_PUBLIC_RUNTIME_MODE ?? runtimeMode,
+    RUNTIME_MODE: runtimeMode,
     TELEMETRY_MODE: environment.TELEMETRY_MODE ?? "disabled",
   });
   const configuration = getDatabaseConfiguration(parsedEnvironment);

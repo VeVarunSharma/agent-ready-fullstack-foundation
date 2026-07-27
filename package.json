@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Product-neutral application platform foundation",
+  "description": "Product-neutral Vercel and Supabase application foundation",
   "license": "UNLICENSED",
   "engines": {
-    "node": "24.18.0",
+    "node": "24.x",
     "pnpm": "11.17.0"
   },
   "packageManager": "pnpm@11.17.0",
@@ -27,10 +27,10 @@
     "spec:validate:all": "tsx scripts/specs/validate.ts --all",
     "db:generate": "pnpm --filter @repo/db --if-present run db:generate",
     "db:migrate:local": "pnpm --filter @repo/db --if-present run db:migrate:local",
+    "db:migrate:production": "pnpm --filter @repo/db --fail-if-no-match run db:migrate:production",
     "db:check": "pnpm --filter @repo/db --if-present run db:check",
     "db:studio": "pnpm --filter @repo/db --if-present run db:studio",
     "infra:validate": "node infra/scripts/validate.mjs",
-    "docker:build": "docker build --file Dockerfile --tag application-foundation:local .",
     "check": "pnpm deps:audit && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm spec:validate:all && pnpm infra:validate",
     "clean": "turbo run clean && rm -rf .turbo coverage"
   },

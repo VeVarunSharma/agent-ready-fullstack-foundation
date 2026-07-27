@@ -201,6 +201,11 @@ async function main() {
       `Foundry templates must not declare models or agents: ${prohibitedFoundryTypes.join(", ")}`,
     );
   }
+  if (emittedResourceTypes.length > 0) {
+    throw new Error(
+      `The retained Azure boundary must emit zero resources: ${emittedResourceTypes.join(", ")}`,
+    );
+  }
 
   run(process.execPath, ["--test", "infra/tests/preflight.test.mjs"]);
   run(process.execPath, [

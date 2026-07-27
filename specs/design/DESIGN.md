@@ -1,6 +1,6 @@
 # Product-neutral design contract
 
-- **Contract version:** v0
+- **Contract version:** v1
 - **Status:** Current foundation contract
 - **Applies to:** `packages/ui` and every rendered interface
 
@@ -192,6 +192,25 @@ Every interactive component accounts for:
 
 Only rest, hover, focus, active, and disabled button states are currently implemented. Other states
 must be implemented and tested with the first approved consumer rather than added speculatively.
+
+## Neutral authentication surface
+
+The invite-only Supabase Auth page is the first form consumer. It introduces no token or shared
+primitive. It uses:
+
+- `background`/`foreground` for the page;
+- `surface`/`surface-foreground` for the form container;
+- `muted-foreground` for instructions;
+- `border`/`input` for structure and the email/password controls;
+- `ring` for keyboard focus;
+- `primary`/`primary-foreground` through the shared `Button`.
+
+The form has visible, programmatically associated email/password labels; concise help; native
+credential controls; one primary submit action; and a persistent `role=status` live region. It
+supports idle, invalid, loading/disabled, rejected, and unavailable states with fixed text rather
+than color. Account existence and provider errors are not displayed. The layout stays single-column,
+reflows at 320 CSS px, and uses existing theme/reduced-motion behavior. No sign-up, social provider,
+brand, avatar, profile, success/error color, or identity detail is admitted.
 
 ## Accessibility acceptance
 

@@ -1,28 +1,18 @@
-# Product-neutral application foundation
+# Vercel and Supabase application foundation
 
-> **WARNING — NOT YET PRODUCTION CONFIGURED.** No Azure resource has been provisioned and no
-> delivery workflow run is evidenced. Production regions, identity audience, DNS/TLS, SKUs, egress,
-> monitoring posture, PostgreSQL principal bootstrap, private-runner controls, residency approvals,
-> and recovery objectives are unresolved. Offline-valid Bicep and checked-in workflows are not
-> deployment readiness.
+> **NOT PRODUCTION CONFIGURED.** This repository contains a tested local application and
+> production-shaped provider contracts. It does not create a Vercel project, Supabase project,
+> custom domain, SMTP provider, protected GitHub environment, database roles, backup policy,
+> residency approval, or Azure resource.
 
-This repository is a lean, production-shaped foundation for a future application. It has one
-runnable Next.js TypeScript app, shared oRPC v1 contracts, accessible semantic UI tokens, an empty
-Drizzle/PostgreSQL boundary, local tests/container tooling, governed specifications, and
-scaffolded-disabled Azure infrastructure. It defines no product behavior, brand, role, permission,
-user model, or Foundry agent.
+This is a reusable, product-neutral foundation for a Next.js application hosted on Vercel with
+Supabase Postgres and Supabase Auth. It includes strict TypeScript, pnpm/Turborepo workspaces, oRPC
+v1 contracts, accessible semantic UI tokens, an empty Drizzle schema, local PostgreSQL integration,
+Supabase-safe runtime and migration connections, deterministic CI, and a protected migration check
+that can gate Vercel production promotion.
 
-## Use this repository as a template
-
-After enabling **Template repository** under the GitHub repository's **Settings > General**, select
-**Use this template > Create a new repository** to copy the complete tracked foundation without its
-Git history.
-
-In each repository created from the template:
-
-1. Replace this README's title and description with the new product context.
-2. Review the production blockers and governance records before adding product behavior.
-3. Follow the local quickstart below and create a governed PRD for each functional change.
+It defines no domain behavior, product table, self-service sign-up, role, permission, user profile,
+Supabase Storage/Realtime function, or Foundry agent.
 
 ## Prerequisites
 
@@ -30,11 +20,10 @@ In each repository created from the template:
 - Corepack `0.35.0`
 - pnpm `11.17.0`
 - Git
-- Docker with Compose v2 for local PostgreSQL/integration/image checks
+- Docker with Compose v2 for local PostgreSQL/integration tests
+- Vercel, Supabase, and GitHub accounts only when configuring cloud environments
 
 ## Local quickstart
-
-From the repository root:
 
 ```sh
 corepack enable
@@ -43,6 +32,7 @@ pnpm install --frozen-lockfile
 
 cat > apps/web/.env.local <<'EOF'
 RUNTIME_MODE=local
+HOST_MODE=local
 DATABASE_MODE=local-password
 AUTH_MODE=disabled
 LOGGING_MODE=json
@@ -62,35 +52,73 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-Open <http://localhost:3000>. The local credential above is intentionally obvious, bound to the
-Compose-only database on `127.0.0.1`, and must never be reused.
+Open <http://localhost:3000>. Authentication is disabled only in the explicit local contract. The
+Compose credential is intentionally obvious, loopback-bound, synthetic, and prohibited elsewhere.
 
 Available protocol surfaces:
 
 - `GET /health/live` — process liveness only
-- `GET /health/ready` — validated configuration and database connectivity when enabled
-- `GET /api/v1/health` — oRPC v1 contract/handler pipeline
+- `GET /health/ready` — configuration and database readiness
+- `GET /api/v1/health` — typed oRPC v1 health pipeline
+- `GET /auth/login` — neutral invite-only Supabase credential surface
 
-Stop the app with `Ctrl-C`, then stop PostgreSQL:
+Stop and clean local resources:
 
 ```sh
 docker compose down
-```
-
-To remove the local PostgreSQL volume as well:
-
-```sh
-docker compose down --volumes
 rm -f apps/web/.env.local
 ```
 
-The home page can run without Azure credentials. Authentication is disabled only in explicit local
-configuration; this is not a production bypass.
+Use `docker compose down --volumes` when the disposable local database should also be removed.
 
-Production does not use these local values. Its exact database mode is
-`DATABASE_MODE=azure-managed-identity`; the image contains `migration/dist/migrate-production.mjs`
-for the protected, manually triggered migration job. Do not invoke that entrypoint locally or as
-part of application startup.
+## Vercel and Supabase shape
+
+The Vercel project uses **Root Directory** `apps/web`. `apps/web/vercel.json` bootstraps exact
+Corepack `0.35.0`/pnpm `11.17.0`, installs the filtered workspace, verifies Vercel selected Node
+`24.x`, and builds only `@repo/web` plus its dependencies. Local/CI use `.node-version` `24.18.0`;
+Vercel rolls minor/patch updates within Node 24. Vercel Git integration supplies preview and staged
+production deployments; no Vercel access token is stored in this repository.
+
+The production runtime contract is exact:
+
+| Boundary  | Required value                                                                      |
+| --------- | ----------------------------------------------------------------------------------- |
+| Runtime   | `RUNTIME_MODE=production`                                                           |
+| Host      | `HOST_MODE=vercel` and Vercel-provided `VERCEL_ENV`                                 |
+| Database  | `DATABASE_MODE=supabase-pooler`, transaction port `6543`, verified root certificate |
+| Auth      | `AUTH_MODE=supabase`, exact HTTPS application/project origins, publishable key only |
+| Logging   | `LOGGING_MODE=json`                                                                 |
+| Telemetry | `TELEMETRY_MODE=disabled`                                                           |
+
+Runtime PostgreSQL uses a dedicated least-privilege role through Supabase transaction pooling with a
+maximum of five application-side connections per Vercel instance. Production migrations use a
+different role and a direct or shared-session endpoint on port `5432`; the same PostgreSQL session
+holds the advisory lock and runs Drizzle. Neither migration credentials nor a service-role key enter
+the Vercel environment.
+
+Supabase Auth uses request-scoped SSR clients, cookie refresh in Next.js `proxy.ts`, and
+`getClaims()` verification. The browser sends credentials directly to Supabase and the repository
+has no signup route. Configure approved users, public-signup denial, password/recovery/MFA policy,
+asymmetric signing keys, rate limits, and any invitation/recovery email provider outside the
+repository. See the [identity runbook](docs/runbooks/identity-bootstrap.md).
+
+## Production migration gate
+
+`.github/workflows/supabase-migrate.yml` runs for every push to `main` and as an explicitly
+confirmed manual dispatch. Its stable check name is **Supabase production migration**. Configure it
+as a Vercel Deployment Check so the production build cannot receive custom-domain traffic before the
+protected GitHub `production` environment approves and completes migration.
+
+The job receives only:
+
+- `SUPABASE_MIGRATION_HOST`
+- `SUPABASE_MIGRATION_DATABASE`
+- `SUPABASE_MIGRATION_USER`
+- `SUPABASE_MIGRATION_PASSWORD`
+- `SUPABASE_MIGRATION_ROOT_CERT`
+
+Never run `pnpm db:migrate:production` from a developer shell, Vercel build, application startup, or
+unprotected job. Follow the [deployment runbook](docs/runbooks/deployment.md).
 
 ## Validation
 
@@ -100,28 +128,7 @@ Fast deterministic pull-request checks:
 pnpm check
 ```
 
-Individual commands:
-
-| Command                             | Purpose                                                  |
-| ----------------------------------- | -------------------------------------------------------- |
-| `pnpm dev`                          | Run persistent workspace development tasks               |
-| `pnpm build`                        | Build packages and the standalone Next.js app            |
-| `pnpm lint`                         | Run shared ESLint and hardcoded-color policy             |
-| `pnpm deps:audit`                   | Reject ranges, lock drift, and resolved prereleases      |
-| `pnpm typecheck`                    | Run strict TypeScript checks                             |
-| `pnpm test` / `pnpm test:unit`      | Run deterministic unit/component tests                   |
-| `pnpm format` / `pnpm format:check` | Write/check Prettier formatting                          |
-| `pnpm spec:new -- <args>`           | Scaffold and catalog a governed PRD                      |
-| `pnpm spec:validate`                | Validate the changed specification set                   |
-| `pnpm spec:validate:all`            | Validate the full specification set                      |
-| `pnpm db:generate`                  | Generate Drizzle migrations from the schema              |
-| `pnpm db:migrate:local`             | Apply migrations to the explicit local database          |
-| `pnpm db:check`                     | Check Drizzle migration consistency                      |
-| `pnpm db:studio`                    | Open local Drizzle Studio                                |
-| `pnpm infra:validate`               | Format/lint/compile Bicep and test preflight offline     |
-| `pnpm docker:build`                 | Build the non-root standalone image from repository root |
-
-Environment-dependent checks stay separate:
+Environment-dependent checks:
 
 ```sh
 docker compose up -d --wait
@@ -129,71 +136,51 @@ pnpm db:migrate:local
 pnpm test:integration
 
 pnpm --filter @repo/web exec playwright install chromium
+pnpm build
 pnpm e2e
-pnpm docker:build
 ```
 
-`pnpm e2e` builds and starts the standalone app with the database disabled, then runs neutral smoke,
-axe WCAG, and post-switch light/dark/system contrast checks. Theme colors change without a
-transition so no animated intermediate can create a transient contrast failure. It makes no Azure or
-external model call.
+| Command                   | Purpose                                               |
+| ------------------------- | ----------------------------------------------------- |
+| `pnpm dev`                | Run persistent workspace development tasks            |
+| `pnpm build`              | Build packages and the Vercel-targeted Next.js app    |
+| `pnpm lint`               | Run shared ESLint and hardcoded-color policy          |
+| `pnpm deps:audit`         | Reject dependency ranges, lock drift, and prereleases |
+| `pnpm typecheck`          | Run strict TypeScript checks                          |
+| `pnpm test:unit`          | Run deterministic unit/component tests                |
+| `pnpm format:check`       | Check Prettier formatting                             |
+| `pnpm spec:new -- <args>` | Scaffold and catalog a governed PRD                   |
+| `pnpm spec:validate:all`  | Validate the full specification catalog               |
+| `pnpm db:generate`        | Generate Drizzle migrations from schema source        |
+| `pnpm db:migrate:local`   | Apply migrations to disposable local PostgreSQL       |
+| `pnpm db:check`           | Check Drizzle migration consistency                   |
+| `pnpm infra:validate`     | Prove retained Azure boundaries emit no resources     |
 
 ## Repository map
 
-| Path                                                        | Owner                                                                      |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`apps/web`](apps/web/)                                     | Next.js routes, oRPC handlers/client, health, auth parsing, runtime wiring |
-| [`packages/api-contracts`](packages/api-contracts/)         | Versioned oRPC v1/Zod contracts and safe envelopes                         |
-| [`packages/db`](packages/db/)                               | Empty Drizzle schema, migrations, `pg` pools, Entra token adapter          |
-| [`packages/env`](packages/env/)                             | Only environment parsing boundary                                          |
-| [`packages/ui`](packages/ui/)                               | Shared primitives and executable semantic light/dark tokens                |
-| [`packages/eslint-config`](packages/eslint-config/)         | Shared flat ESLint rules                                                   |
-| [`packages/typescript-config`](packages/typescript-config/) | Shared strict TypeScript configurations                                    |
-| [`services`](services/)                                     | Reserved; `.gitkeep` only until an approved PRD admits a service           |
-| [`infra`](infra/)                                           | Offline-compiled Bicep, synthetic/incomplete inputs, fail-closed preflight |
-| [`.github/workflows`](.github/workflows/)                   | Deterministic CI plus guarded, unexecuted Azure plan/deploy candidates     |
-| [`.copilot/skills`](.copilot/skills/)                       | Repository-local agent skills                                              |
-| [`specs`](specs/)                                           | Empty product PRD catalog, templates/tooling, design contract              |
-| [`docs`](docs/)                                             | ADRs, security/residency records, readiness and operator runbooks          |
-| [`Dockerfile`](Dockerfile)                                  | Root-context standalone non-root production-shaped image                   |
-| [`compose.yaml`](compose.yaml)                              | Local-only PostgreSQL 18 service and persistent development volume         |
+| Path                     | Responsibility                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `apps/web`               | Next.js routes, Supabase Auth, oRPC, probes, Vercel configuration                     |
+| `packages/api-contracts` | Versioned oRPC v1/Zod contracts and safe envelopes                                    |
+| `packages/db`            | Empty Drizzle schema, local migration, pooled runtime, protected migration entrypoint |
+| `packages/env`           | Only runtime/browser/migration environment parser                                     |
+| `packages/ui`            | Accessible primitives and executable semantic tokens                                  |
+| `infra`                  | Zero-resource Azure/Foundry/Monitor/OIDC admission boundary                           |
+| `.github/workflows`      | CI, integration, browser checks, IaC validation, protected migration                  |
+| `specs`                  | Governed PRD catalog and design contract                                              |
+| `docs`                   | ADR, architecture, security, residency, and operator runbooks                         |
 
-Workspace imports use explicit `@repo/*` package exports. First-party JSON APIs use stable **oRPC
-v1.14.10**, not the superseded ts-rest direction or the oRPC v2 beta. ESLint `9.39.5` is the newest
-stable peer-compatible line for this workspace; the incompatible ESLint 10 baseline was deliberately
-not selected. shadcn-generated configuration and component patterns are retained without installing
-the shadcn CLI. The dependency audit confirms zero resolved semantic-version prereleases. These are
-resolved tooling choices, not open failures.
+## Retained Azure boundary
 
-## Architecture and governance
-
-- [Constitution](CONSTITUTION.md) — binding repository rules
-- [Architecture](ARCHITECTURE.md) — implemented, scaffolded-disabled, and future system shape
-- [Security](SECURITY.md) — security posture and canonical records
-- [Design contract](specs/design/DESIGN.md) — semantic UI/accessibility contract
-- [Contributing](CONTRIBUTING.md) — PRD-first workflow and commands
-- [ADR-0001](docs/adr/0001-platform-foundation.md) — platform foundation decisions
-- [Deployment runbook](docs/runbooks/deployment.md) — explicit production blockers and sequencing
-- [Foundry readiness](docs/architecture/FOUNDRY_READINESS.md) — closed admission gate
-
-The Azure target is a regional Application Gateway WAF in front of an internal Container Apps
-environment, with private ACR, Key Vault, PostgreSQL Flexible Server, a separate migration job,
-regional private Log Analytics routing, managed identities, private DNS/endpoints, and controlled
-egress. Application Insights and AMPLS are scaffolded-disabled and no application connection string
-or trace exporter is wired. Foundry is a false-only, nondeployable boundary that emits no resources,
-DNS, RBAC, requirements, model, or agent. All Azure surfaces remain undeployed.
+The application currently calls no Azure service. Foundry remains false-only and emits no resource.
+Azure Monitor application export remains rejected. If a future PRD adds an Azure consumer, Vercel
+must exchange an OIDC token with audience `api://AzureADTokenExchange` through an exact Entra
+federated credential and narrowly scoped RBAC; an Azure client secret is prohibited.
 
 ## Before product work
 
-After the bootstrap merges, every functional change requires a same-change active/current cataloged
-PRD. Validation fails closed for source, manifests, lockfiles, configuration, styles, IaC,
-workflows, Copilot instructions/skills, unknown paths, deletions, and both sides of renames; only
-narrowly recognized documentation and harmless metadata are exempt. Boundary changes update
-architecture in the same change; design, sensitive-data, and persistence impacts update their
-canonical artifacts. Unknown customer data is Restricted, and unresolved region/identity/retention
-decisions fail closed.
-
-Do not run `azd up`, dispatch the production workflow, provision Azure, enable Foundry, or use a
-live model as part of ordinary setup or validation. The workflow definitions require four distinct
-OIDC client identities, but their protected environment, federated credentials, Azure RBAC, and
-isolated VNet-connected runner are external controls that this repository does not create or prove.
+Every functional change after this foundation requires a cataloged PRD in the same pull request.
+Persistence changes must include reviewed schema and generated forward-only migrations. New user or
+customer data remains Restricted until explicitly classified, and unknown provider regions,
+replication, backups, retention, deletion, support access, identity policy, or recovery objectives
+block production use.

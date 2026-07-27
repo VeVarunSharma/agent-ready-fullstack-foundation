@@ -1,8 +1,6 @@
 # Repository Constitution
 
-**Version:** 1.0.0  
-**Effective:** 2026-07-26  
-**Status:** Binding
+**Version:** 2.0.0 **Effective:** 2026-07-27 **Status:** Binding
 
 ## 1. Authority and scope
 
@@ -58,13 +56,20 @@ infrastructure as code. Portal-only drift is prohibited. Unknown production inpu
 parameters and deployment preflight must reject them. Infrastructure validation may run offline;
 provisioning requires separate authorization and may never be implied by successful compilation.
 
-### Principle 6: Managed identity and least privilege govern access
+### Principle 6: Federated identity, protected credentials, and least privilege govern access
 
-Azure service-to-service access uses managed identity where supported. Human, workload, migration,
-and automation identities must be distinct when their duties differ. Permissions are granted at the
-narrowest practical scope, broad ownership is prohibited, and authorization remains application
-owned and deny-by-default. Static production database passwords and long-lived CI credentials are
-prohibited.
+Cloud-to-cloud access uses short-lived workload identity federation where supported. Vercel-to-Azure
+access must use an exact-subject OIDC federated credential and narrow Azure RBAC, never an Azure
+client secret. Human, runtime, migration, and automation identities remain distinct when their
+duties differ, broad ownership is prohibited, and application authorization remains deny-by-default.
+
+When a selected provider does not support workload federation for PostgreSQL protocol access,
+production may use distinct least-privilege runtime and migration database-role credentials only
+when the admitting PRD records that limitation, the values live solely in approved encrypted
+provider settings, transport verifies the provider certificate, and rotation/revocation plus access
+evidence are defined. Default administrator roles, shared runtime/migration credentials, Supabase
+service-role keys in the application, committed credentials, unscoped database URLs, and long-lived
+cloud management credentials in CI are prohibited.
 
 ### Principle 7: The design system and accessibility are contracts
 
@@ -164,3 +169,13 @@ or material requirement is minor. Clarifying wording without changing obligation
 Merge approval asserts that the change complies with the current constitution, its cataloged PRD
 when required, and all applicable verification gates. Compliance with this repository constitution
 does not by itself establish production authorization, regulatory approval, or deployment readiness.
+
+## 7. Amendment record
+
+Version 2.0.0 replaces the universal production database-password prohibition with the narrow,
+provider-limited credential contract in Principle 6. The change is required because Supabase
+PostgreSQL and its supported CI migration path do not provide workload-identity authentication for
+native PostgreSQL connections. The major version preserves the original security intent through
+separate least-privilege roles, encrypted provider custody, verified TLS, rotation/revocation, and
+continued prohibition of administrator, service-role, committed, URL-shaped, and cloud-management
+credentials.

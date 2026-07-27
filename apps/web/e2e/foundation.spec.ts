@@ -29,7 +29,7 @@ test("renders the neutral foundation home page", async ({ page }) => {
   );
 });
 
-test("serves live and ready protocol endpoints without Azure credentials", async ({ request }) => {
+test("serves live and ready protocol endpoints without cloud credentials", async ({ request }) => {
   const liveness = await request.get("/health/live");
   const readiness = await request.get("/health/ready");
 
@@ -37,6 +37,20 @@ test("serves live and ready protocol endpoints without Azure credentials", async
   await expect(liveness.json()).resolves.toMatchObject({ status: "live" });
   expect(readiness.status()).toBe(200);
   await expect(readiness.json()).resolves.toMatchObject({ status: "ready" });
+});
+
+test("renders an accessible invite-only sign-in surface", async ({ page }) => {
+  await page.goto("/auth/login");
+
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Email address" })).toBeVisible();
+  await expect(page.getByLabel("Password")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByText("Access is invite-only.")).toBeVisible();
+  await expectNoAccessibilityViolations(page);
+
+  await page.getByRole("textbox", { name: "Email address" }).focus();
+  await expect(page.getByRole("textbox", { name: "Email address" })).toBeFocused();
 });
 
 test("applies and persists explicit theme choices", async ({ page }) => {

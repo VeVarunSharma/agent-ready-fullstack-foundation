@@ -13,13 +13,13 @@
 ## Current boundary
 
 [`infra/modules/foundry.bicep`](../../infra/modules/foundry.bicep) deliberately exposes only
-`enableFoundry=false`. Its compiled resource list is empty. The platform invokes the module only
-behind the disabled feature gate, and production preflight rejects any configuration/parameter that
-requests Foundry or declares a model.
+`enableFoundry=false`. Its compiled resource list is empty. `infra/main.bicep` independently keeps
+the same false-only parameter and also emits no resources. Production preflight rejects any Foundry
+enablement.
 
 The disabled repository configuration has:
 
-- no `foundry` configuration object or Foundry location/name;
+- only `azure.foundry.enabled=false`, with no Foundry location/name;
 - no Foundry/BYO-store public-access, diagnostic, or retention requirements;
 - no Foundry agent subnet, route, private DNS, endpoint, or firewall rule;
 - no account/project/store identity or management/data-plane RBAC;
@@ -84,8 +84,9 @@ Every gate needs an owner, evidence, scope, approval date, and review/expiry eve
 
 ### Network, identity, state, and operations
 
-- [ ] Private endpoints/DNS, public denial, injected networking, controlled egress, and all required
-      platform endpoints are designed and tested.
+- [ ] The selected Vercel-to-Foundry network path, endpoint exposure, DNS, egress, and failure
+      policy are designed and tested; private networking must not be claimed by analogy to the
+      superseded Container Apps topology.
 - [ ] Human, deployment, account, project, hosted-agent, application, and tool identities are
       separated by duty with exact management/native data-plane roles.
 - [ ] Every thread, message, file, vector, memory, index, cache, trace, evaluation, log, backup, and
@@ -116,7 +117,8 @@ The first Foundry PRD must:
 4. add deterministic runtime contracts/mocks plus fail-closed compile/preflight tests;
 5. keep model and agent selection inside approved scope rather than inferring it from
    infrastructure;
-6. require a separately protected what-if/deployment authorization and environment evidence.
+6. require separately protected Azure planning/deployment authorization plus exact Vercel OIDC
+   federation and environment evidence.
 
 Until then, `enableFoundry=false`, `services/.gitkeep` remains the only service content, and all
 Foundry resources and external model calls are prohibited.

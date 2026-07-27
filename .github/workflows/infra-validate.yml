@@ -18,7 +18,7 @@ env:
 
 jobs:
   validate:
-    name: Offline Bicep and production preflight tests
+    name: Offline retained-Azure boundary tests
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 

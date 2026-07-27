@@ -1,62 +1,93 @@
-import { serverEnvironmentSchema, type ServerEnvironment } from "./schemas";
+import {
+  clientEnvironmentSchema,
+  migrationEnvironmentSchema,
+  serverEnvironmentSchema,
+  type ClientEnvironment,
+  type MigrationEnvironment,
+  type ServerEnvironment,
+} from "./schemas";
 
 export {
   AZURE_MONITOR_EXPORT_UNAVAILABLE_REASON,
   authenticationModeSchema,
+  clientEnvironmentSchema,
   databaseModeSchema,
+  hostModeSchema,
   loggingModeSchema,
+  migrationEnvironmentSchema,
   runtimeModeSchema,
   serverEnvironmentSchema,
   telemetryModeSchema,
+  vercelEnvironmentSchema,
   type AuthenticationMode,
+  type ClientEnvironment,
   type DatabaseMode,
+  type HostMode,
   type LoggingMode,
+  type MigrationEnvironment,
   type RuntimeMode,
   type ServerEnvironment,
   type TelemetryMode,
+  type VercelEnvironment,
 } from "./schemas";
+
+interface CommonDatabaseConfiguration {
+  readonly host: string;
+  readonly port: number;
+  readonly database: string;
+  readonly user: string;
+  readonly poolMax: number;
+  readonly probeTimeoutMs: number;
+}
 
 export interface DisabledDatabaseConfiguration {
   readonly mode: "disabled";
 }
 
-export interface LocalPasswordDatabaseConfiguration {
+export interface LocalPasswordDatabaseConfiguration extends CommonDatabaseConfiguration {
   readonly mode: "local-password";
+  readonly password: string;
+}
+
+export interface SupabasePoolerDatabaseConfiguration extends CommonDatabaseConfiguration {
+  readonly mode: "supabase-pooler";
+  readonly password: string;
+  readonly rootCertificate: string;
+}
+
+export interface SupabaseMigrationDatabaseConfiguration {
+  readonly mode: "supabase-session";
   readonly host: string;
-  readonly port: number;
+  readonly port: 5432;
   readonly database: string;
   readonly user: string;
   readonly password: string;
-  readonly poolMax: number;
-  readonly probeTimeoutMs: number;
-}
-
-export interface AzureManagedIdentityDatabaseConfiguration {
-  readonly mode: "azure-managed-identity";
-  readonly host: string;
-  readonly port: number;
-  readonly database: string;
-  readonly user: string;
-  readonly managedIdentityClientId: string;
-  readonly poolMax: number;
-  readonly probeTimeoutMs: number;
-}
-
-export interface LocalAzureCredentialDatabaseConfiguration {
-  readonly mode: "local-azure-credential";
-  readonly host: string;
-  readonly port: number;
-  readonly database: string;
-  readonly user: string;
-  readonly poolMax: number;
-  readonly probeTimeoutMs: number;
+  readonly rootCertificate: string;
 }
 
 export type DatabaseConfiguration =
   | DisabledDatabaseConfiguration
   | LocalPasswordDatabaseConfiguration
-  | AzureManagedIdentityDatabaseConfiguration
-  | LocalAzureCredentialDatabaseConfiguration;
+  | SupabasePoolerDatabaseConfiguration;
+
+export interface DisabledAuthenticationConfiguration {
+  readonly mode: "disabled";
+}
+
+export interface SupabaseAuthenticationConfiguration {
+  readonly mode: "supabase";
+  readonly applicationOrigin: string;
+  readonly url: string;
+  readonly publishableKey: string;
+}
+
+export type AuthenticationConfiguration =
+  DisabledAuthenticationConfiguration | SupabaseAuthenticationConfiguration;
+
+export interface SupabasePublicConfiguration {
+  readonly url: string;
+  readonly publishableKey: string;
+}
 
 export interface DisabledTelemetryConfiguration {
   readonly mode: "disabled";
@@ -84,7 +115,6 @@ function requiredValue(value: string | undefined, fieldName: string): string {
   if (value === undefined) {
     throw new EnvironmentConfigurationError([fieldName]);
   }
-
   return value;
 }
 
@@ -109,18 +139,91 @@ export function getDatabaseConfiguration(environment: ServerEnvironment): Databa
         ...databaseConnectionFields(environment),
         password: requiredValue(environment.DATABASE_PASSWORD, "DATABASE_PASSWORD"),
       };
-    case "azure-managed-identity":
+    case "supabase-pooler":
       return {
-        mode: "azure-managed-identity",
+        mode: "supabase-pooler",
         ...databaseConnectionFields(environment),
-        managedIdentityClientId: requiredValue(environment.AZURE_CLIENT_ID, "AZURE_CLIENT_ID"),
-      };
-    case "local-azure-credential":
-      return {
-        mode: "local-azure-credential",
-        ...databaseConnectionFields(environment),
+        password: requiredValue(
+          environment.SUPABASE_DATABASE_PASSWORD,
+          "SUPABASE_DATABASE_PASSWORD",
+        ),
+        rootCertificate: requiredValue(
+          environment.SUPABASE_DATABASE_ROOT_CERT,
+          "SUPABASE_DATABASE_ROOT_CERT",
+        ),
       };
   }
+}
+
+export function getAuthenticationConfiguration(
+  environment: ServerEnvironment,
+): AuthenticationConfiguration {
+  switch (environment.AUTH_MODE) {
+    case "disabled":
+      return { mode: "disabled" };
+    case "supabase":
+      return {
+        mode: "supabase",
+        applicationOrigin: requiredValue(environment.APPLICATION_ORIGIN, "APPLICATION_ORIGIN"),
+        url: requiredValue(environment.NEXT_PUBLIC_SUPABASE_URL, "NEXT_PUBLIC_SUPABASE_URL"),
+        publishableKey: requiredValue(
+          environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+          "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        ),
+      };
+  }
+}
+
+export function getSupabasePublicConfiguration(
+  environment: Pick<
+    ClientEnvironment | ServerEnvironment,
+    "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+  >,
+): SupabasePublicConfiguration | undefined {
+  if (
+    environment.NEXT_PUBLIC_SUPABASE_URL === undefined ||
+    environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    url: environment.NEXT_PUBLIC_SUPABASE_URL,
+    publishableKey: environment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  };
+}
+
+export function requireSupabasePublicConfiguration(
+  environment: Pick<
+    ClientEnvironment | ServerEnvironment,
+    "NEXT_PUBLIC_SUPABASE_URL" | "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+  >,
+): SupabasePublicConfiguration {
+  const configuration = getSupabasePublicConfiguration(environment);
+  if (configuration === undefined) {
+    throw new EnvironmentConfigurationError([
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "NEXT_PUBLIC_SUPABASE_URL",
+    ]);
+  }
+  return configuration;
+}
+
+export function getMigrationDatabaseConfiguration(
+  environment: MigrationEnvironment,
+): SupabaseMigrationDatabaseConfiguration {
+  return {
+    mode: "supabase-session",
+    host: requiredValue(environment.SUPABASE_MIGRATION_HOST, "SUPABASE_MIGRATION_HOST"),
+    port: 5432,
+    database: requiredValue(environment.SUPABASE_MIGRATION_DATABASE, "SUPABASE_MIGRATION_DATABASE"),
+    user: requiredValue(environment.SUPABASE_MIGRATION_USER, "SUPABASE_MIGRATION_USER"),
+    password: requiredValue(environment.SUPABASE_MIGRATION_PASSWORD, "SUPABASE_MIGRATION_PASSWORD"),
+    rootCertificate: requiredValue(
+      environment.SUPABASE_MIGRATION_ROOT_CERT,
+      "SUPABASE_MIGRATION_ROOT_CERT",
+    ),
+  };
 }
 
 export function getTelemetryConfiguration(environment: ServerEnvironment): TelemetryConfiguration {
@@ -138,21 +241,32 @@ export function getTelemetryConfiguration(environment: ServerEnvironment): Telem
   }
 }
 
+function fieldsFromIssues(
+  issues: readonly { readonly path: readonly PropertyKey[] }[],
+): readonly string[] {
+  return [
+    ...new Set(
+      issues.flatMap((issue) => {
+        const field = issue.path[0];
+        return typeof field === "string" ? [field] : [];
+      }),
+    ),
+  ].sort();
+}
+
 export function parseServerEnvironment(input: unknown): ServerEnvironment {
   const result = serverEnvironmentSchema.safeParse(input);
-
   if (!result.success) {
-    const fields = [
-      ...new Set(
-        result.error.issues.flatMap((issue) => {
-          const field = issue.path[0];
-          return typeof field === "string" ? [field] : [];
-        }),
-      ),
-    ].sort();
-    throw new EnvironmentConfigurationError(fields);
+    throw new EnvironmentConfigurationError(fieldsFromIssues(result.error.issues));
   }
+  return result.data;
+}
 
+export function parseMigrationEnvironment(input: unknown): MigrationEnvironment {
+  const result = migrationEnvironmentSchema.safeParse(input);
+  if (!result.success) {
+    throw new EnvironmentConfigurationError(fieldsFromIssues(result.error.issues));
+  }
   return result.data;
 }
 
@@ -164,10 +278,17 @@ export function loadServerEnvironment(): ServerEnvironment {
   return parseServerEnvironment(process.env);
 }
 
+export function loadMigrationEnvironment(): MigrationEnvironment {
+  return parseMigrationEnvironment(process.env);
+}
+
+export function parseClientEnvironment(input: unknown): ClientEnvironment {
+  return clientEnvironmentSchema.parse(input);
+}
+
 export function createLocalDatabaseUrl(configuration: LocalPasswordDatabaseConfiguration): string {
   const username = encodeURIComponent(configuration.user);
   const password = encodeURIComponent(configuration.password);
   const database = encodeURIComponent(configuration.database);
-
   return `postgresql://${username}:${password}@${configuration.host}:${String(configuration.port)}/${database}`;
 }

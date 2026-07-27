@@ -15,16 +15,17 @@ env:
   CI: "true"
   NEXT_TELEMETRY_DISABLED: "1"
   TURBO_TELEMETRY_DISABLED: "1"
-  RUNTIME_MODE: production
+  RUNTIME_MODE: test
+  HOST_MODE: local
   DATABASE_MODE: disabled
-  AUTH_MODE: container-apps
+  AUTH_MODE: disabled
   LOGGING_MODE: json
   TELEMETRY_MODE: disabled
-  NEXT_PUBLIC_RUNTIME_MODE: production
+  NEXT_PUBLIC_RUNTIME_MODE: test
 
 jobs:
   e2e:
-    name: Production server smoke and WCAG
+    name: Next.js server smoke and WCAG
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 

@@ -4,7 +4,8 @@ export {
   DatabaseDisabledError,
   createDatabasePool,
   createDatabasePoolFactory,
+  createMigrationPoolFactory,
   createPgPoolConfiguration,
+  createSupabaseMigrationPool,
+  createSupabaseMigrationPoolConfiguration,
 } from "./internal/pool";
-
-export type { PoolConfigurationDependencies, TokenProviderFactory } from "./internal/pool";

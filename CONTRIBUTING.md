@@ -74,8 +74,8 @@ need an immediate consumer and a documented reason.
 | `pnpm spec:validate:all` | Validate the complete specification set                           |
 | `pnpm check`             | Run fast deterministic pull-request checks                        |
 
-Database, infrastructure, and image command names are reserved at the root. Their workspace
-implementations are added only in the phase that owns those surfaces.
+Database, infrastructure, and provider-release command names are reserved at the root. Production
+migration execution belongs only to the protected workflow, never ordinary local validation.
 
 ## Pull-request expectations
 

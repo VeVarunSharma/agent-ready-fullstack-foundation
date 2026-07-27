@@ -1,5 +1,23 @@
 {
   "$schema": "../catalog.schema.json",
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "id": "VERCEL_SUPABASE_FOUNDATION",
+      "version": "1",
+      "path": "specs/PRDs/PRD_V1_VERCEL_SUPABASE_FOUNDATION.md",
+      "title": "Vercel and Supabase application foundation",
+      "summary": "Provide a reusable Vercel Next.js foundation with Supabase Postgres and Auth.",
+      "lifecycle": "current",
+      "owners": ["@mortgatemate"],
+      "created": "2026-07-27",
+      "updated": "2026-07-27",
+      "dataClassification": "Restricted",
+      "supersededBy": null,
+      "architectureImpact": true,
+      "designSystemImpact": true,
+      "sensitiveDataImpact": true,
+      "persistenceImpact": false
+    }
+  ]
 }

@@ -10,8 +10,8 @@ Read the relevant PRD, `ARCHITECTURE.md`, `docs/adr/`, `docs/security/DATA_RESID
 
 - Use reviewed GA APIs and pinned modules only. Keep unknown production values explicit and rejected
   by preflight.
-- Preserve private-by-default networking, managed identity, narrow RBAC scopes, immutable
-  configuration, and disabled optional features.
+- Preserve the zero-resource boundary. Future Vercel access uses exact-subject OIDC federation,
+  narrow RBAC, and an approved network path; no Azure client secret or speculative resource.
 - Synthetic compile fixtures must remain nondeployable; checked-in production inputs stay
   intentionally incomplete.
 - Keep infrastructure status accurate in architecture and security/residency documents.

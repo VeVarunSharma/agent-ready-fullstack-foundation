@@ -1,7 +1,7 @@
-name: platform-foundation
+name: vercel-supabase-foundation
 
 metadata:
-  template: platform-foundation@0.0.0
+  template: vercel-supabase-foundation@0.0.0
 
 infra:
   provider: bicep

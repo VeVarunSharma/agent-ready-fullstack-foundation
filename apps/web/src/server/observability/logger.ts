@@ -7,7 +7,6 @@ import { z } from "zod";
 const logEventSchema = z.enum([
   "api.request.completed",
   "api.request.failed",
-  "auth.principal.malformed",
   "database.probe.completed",
   "runtime.configuration.invalid",
   "telemetry.initialized",
@@ -27,9 +26,8 @@ const logFieldSchema = z
     durationMs: z.number().nonnegative().max(300_000).optional(),
     statusCode: z.number().int().min(100).max(599).optional(),
     outcome: z.enum(["success", "failure", "skipped"]).optional(),
-    component: z.enum(["api", "auth", "database", "runtime", "telemetry"]).optional(),
+    component: z.enum(["api", "database", "runtime", "telemetry"]).optional(),
     databaseEnabled: z.boolean().optional(),
-    authState: z.enum(["absent", "malformed", "valid"]).optional(),
     telemetryMode: z.enum(["disabled", "azure-monitor"]).optional(),
   })
   .strip();

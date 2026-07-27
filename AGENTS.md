@@ -14,14 +14,14 @@ Use this file as a map, not as policy.
 
 ## Select the matching runbook
 
-| Work                                 | Skill                                                                       |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| PRDs and governed functional changes | [`spec-driven-dev`](.copilot/skills/spec-driven-dev/SKILL.md)               |
-| UI and semantic tokens               | [`design-system`](.copilot/skills/design-system/SKILL.md)                   |
-| First-party JSON contracts           | [`orpc-contracts`](.copilot/skills/orpc-contracts/SKILL.md)                 |
-| PostgreSQL schema and migrations     | [`drizzle-azure-postgres`](.copilot/skills/drizzle-azure-postgres/SKILL.md) |
-| Azure IaC and preflight              | [`azure-platform`](.copilot/skills/azure-platform/SKILL.md)                 |
-| Future Foundry work                  | [`foundry-agent`](.copilot/skills/foundry-agent/SKILL.md)                   |
+| Work                                 | Skill                                                                             |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| PRDs and governed functional changes | [`spec-driven-dev`](.copilot/skills/spec-driven-dev/SKILL.md)                     |
+| UI and semantic tokens               | [`design-system`](.copilot/skills/design-system/SKILL.md)                         |
+| First-party JSON contracts           | [`orpc-contracts`](.copilot/skills/orpc-contracts/SKILL.md)                       |
+| PostgreSQL schema and migrations     | [`drizzle-supabase-postgres`](.copilot/skills/drizzle-supabase-postgres/SKILL.md) |
+| Azure IaC and preflight              | [`azure-platform`](.copilot/skills/azure-platform/SKILL.md)                       |
+| Future Foundry work                  | [`foundry-agent`](.copilot/skills/foundry-agent/SKILL.md)                         |
 
 Path-specific rules under [`.github/instructions/`](.github/instructions/) apply automatically. The
 repository currently contains a product-neutral foundation, not product behavior.

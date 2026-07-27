@@ -4,18 +4,18 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type { PoolClient } from "pg";
 import {
-  getDatabaseConfiguration,
-  parseServerEnvironment,
-  type AzureManagedIdentityDatabaseConfiguration,
+  getMigrationDatabaseConfiguration,
+  parseMigrationEnvironment,
+  type SupabaseMigrationDatabaseConfiguration,
 } from "@repo/env/tooling";
 
-import { createDatabasePool } from "./internal/pool";
+import { createSupabaseMigrationPool } from "./internal/pool";
 
 const PRODUCTION_MIGRATION_ADVISORY_LOCK = [0x4654434d, 0x4d494752] as const;
 
 export class ProductionMigrationConfigurationError extends Error {
   constructor() {
-    super("Production migrations require the production managed-identity database contract.");
+    super("Production migrations require the protected Supabase session contract.");
     this.name = "ProductionMigrationConfigurationError";
   }
 }
@@ -58,26 +58,21 @@ export async function withProductionMigrationLock(
 
 export function loadProductionMigrationConfiguration(
   environment: NodeJS.ProcessEnv = process.env,
-): AzureManagedIdentityDatabaseConfiguration {
-  if (
-    environment.RUNTIME_MODE !== "production" ||
-    environment.DATABASE_MODE !== "azure-managed-identity"
-  ) {
-    throw new ProductionMigrationConfigurationError();
+): SupabaseMigrationDatabaseConfiguration {
+  try {
+    return getMigrationDatabaseConfiguration(parseMigrationEnvironment(environment));
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      throw new ProductionMigrationConfigurationError();
+    }
+    throw error;
   }
-
-  const configuration = getDatabaseConfiguration(parseServerEnvironment(environment));
-  if (configuration.mode !== "azure-managed-identity") {
-    throw new ProductionMigrationConfigurationError();
-  }
-
-  return configuration;
 }
 
 export async function runProductionMigrations(
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  const pool = createDatabasePool(loadProductionMigrationConfiguration(environment));
+  const pool = createSupabaseMigrationPool(loadProductionMigrationConfiguration(environment));
   let client: PoolClient | undefined;
 
   try {
@@ -97,9 +92,9 @@ export async function runProductionMigrations(
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     await runProductionMigrations();
-    console.log("Production PostgreSQL migrations are current.");
+    console.log("Production Supabase migrations are current.");
   } catch {
-    console.error("Production PostgreSQL migration failed.");
+    console.error("Production Supabase migration failed.");
     process.exitCode = 1;
   }
 }

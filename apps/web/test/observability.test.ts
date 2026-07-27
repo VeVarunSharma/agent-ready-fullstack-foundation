@@ -121,9 +121,10 @@ describe("telemetry adapter", () => {
     await expect(
       initializeRuntimeTelemetry(
         {
-          RUNTIME_MODE: "production",
+          RUNTIME_MODE: "test",
+          HOST_MODE: "local",
           DATABASE_MODE: "disabled",
-          AUTH_MODE: "container-apps",
+          AUTH_MODE: "disabled",
           LOGGING_MODE: "json",
           TELEMETRY_MODE: "disabled",
           DATABASE_PORT: 5432,
@@ -152,8 +153,9 @@ describe("telemetry adapter", () => {
     it("fails startup when production telemetry mode is not explicit", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("RUNTIME_MODE", "production");
+      vi.stubEnv("HOST_MODE", "vercel");
       vi.stubEnv("DATABASE_MODE", "disabled");
-      vi.stubEnv("AUTH_MODE", "container-apps");
+      vi.stubEnv("AUTH_MODE", "supabase");
       vi.stubEnv("LOGGING_MODE", "json");
       vi.stubEnv("TELEMETRY_MODE", "");
 
@@ -163,17 +165,19 @@ describe("telemetry adapter", () => {
     it("fails framework production when the application runtime mode is absent", async () => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("RUNTIME_MODE", "");
+      vi.stubEnv("HOST_MODE", "vercel");
       vi.stubEnv("DATABASE_MODE", "disabled");
-      vi.stubEnv("AUTH_MODE", "container-apps");
+      vi.stubEnv("AUTH_MODE", "supabase");
       vi.stubEnv("LOGGING_MODE", "json");
       vi.stubEnv("TELEMETRY_MODE", "disabled");
 
       await expect(registerInstrumentation()).rejects.toThrow("Runtime configuration is invalid.");
     });
 
-    it("does not require Azure configuration for an incomplete local startup", async () => {
+    it("does not require cloud configuration for an incomplete local startup", async () => {
       vi.stubEnv("NODE_ENV", "development");
       vi.stubEnv("RUNTIME_MODE", "local");
+      vi.stubEnv("HOST_MODE", "local");
       vi.stubEnv("DATABASE_MODE", "");
       vi.stubEnv("AUTH_MODE", "");
       vi.stubEnv("LOGGING_MODE", "");

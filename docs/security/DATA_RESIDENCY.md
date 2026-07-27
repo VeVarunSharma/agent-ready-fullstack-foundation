@@ -22,17 +22,21 @@ telemetry, support, or control-plane location blocks production use.
 | Git/GitHub                 | Source, reviews, checks, security metadata                   | GitHub contracted/control-plane geography              | Terms, access, retention, support; no secrets/customer payload |
 | npm/pnpm/OCI dependencies  | Package metadata and caches                                  | External registries/CDNs and local stores              | Integrity, mirrors, retention, support                         |
 
+GitHub default CodeQL may process source and security findings in GitHub's code-scanning control
+plane. The repository intentionally submits no advanced-workflow SARIF while default setup is
+configured; its geography, retention, reader access, and support path remain external approvals.
+
 ## Vercel surfaces
 
 No Vercel project is currently configured.
 
-| Surface                  | Intended data                                                                                          | Regionality/copies                                                                    | Required approval                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Edge/CDN/TLS             | Hosts, paths, headers, cookies, response content, network metadata                                     | Global/provider-managed edge; exact processing locations depend on plan/settings      | Edge geography, logs, DDoS/WAF/protection, TLS/DNS, support, retention                       |
-| Next.js Functions        | Request metadata, Auth cookies/claims, ephemeral runtime, DB credential in memory, safe stdout         | Selected Vercel function region(s); scheduler/control/build/support planes may differ | Exact regions, failover, fluid compute, memory lifecycle, support, incident access           |
-| Build/preview            | Source, public Supabase config, build logs/artifacts                                                   | Vercel build regions and caches; preview URLs/global edge                             | Environment isolation, secret scoping, fork protection, artifact/log retention               |
-| Platform logs            | Request/function/build/deployment metadata; may include full callback URLs unless configured otherwise | Vercel log infrastructure and drains per plan                                         | Field schema/redaction, token-hash URL treatment, access, region, retention, deletion/export |
-| Deployment control plane | Git metadata, project settings, domains, checks, rollbacks                                             | Provider-managed/nonregional                                                          | Account security, RBAC, history, support, retention, deletion                                |
+| Surface                  | Intended data                                                                                  | Regionality/copies                                                                    | Required approval                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Edge/CDN/TLS             | Hosts, paths, headers, cookies, response content, network metadata                             | Global/provider-managed edge; exact processing locations depend on plan/settings      | Edge geography, logs, DDoS/WAF/protection, TLS/DNS, support, retention                         |
+| Next.js Functions        | Request metadata, Auth cookies/claims, ephemeral runtime, DB credential in memory, safe stdout | Selected Vercel function region(s); scheduler/control/build/support planes may differ | Exact regions, failover, fluid compute, memory lifecycle, support, incident access             |
+| Build/preview            | Source, public Supabase config, build logs/artifacts                                           | Vercel build regions and caches; preview URLs/global edge                             | Environment isolation, secret scoping, fork protection, artifact/log retention                 |
+| Platform logs            | Request/function/build/deployment and Auth error metadata                                      | Vercel log infrastructure and drains per plan                                         | Field schema/redaction, credential/error treatment, access, region, retention, deletion/export |
+| Deployment control plane | Git metadata, project settings, domains, checks, rollbacks                                     | Provider-managed/nonregional                                                          | Account security, RBAC, history, support, retention, deletion                                  |
 
 Preview deployments must use a separate nonproduction Supabase project or stay
 Auth/database-disabled. They must never receive production runtime or migration credentials.

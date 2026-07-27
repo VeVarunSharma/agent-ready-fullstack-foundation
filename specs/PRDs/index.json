@@ -7,7 +7,7 @@
       "version": "1",
       "path": "specs/PRDs/PRD_V1_VERCEL_SUPABASE_FOUNDATION.md",
       "title": "Vercel and Supabase application foundation",
-      "summary": "Provide a reusable Vercel Next.js foundation with Supabase Postgres and Auth.",
+      "summary": "Provide a Vercel Next.js foundation with Supabase Postgres, Auth, and guarded delivery.",
       "lifecycle": "current",
       "owners": ["@mortgatemate"],
       "created": "2026-07-27",

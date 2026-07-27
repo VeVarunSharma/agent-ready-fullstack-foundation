@@ -3,7 +3,7 @@ id: "VERCEL_SUPABASE_FOUNDATION"
 version: "1"
 path: "specs/PRDs/PRD_V1_VERCEL_SUPABASE_FOUNDATION.md"
 title: "Vercel and Supabase application foundation"
-summary: "Provide a reusable Vercel Next.js foundation with Supabase Postgres and Auth."
+summary: "Provide a Vercel Next.js foundation with Supabase Postgres, Auth, and guarded delivery."
 lifecycle: "current"
 owners: ["@mortgatemate"]
 created: "2026-07-27"
@@ -55,6 +55,8 @@ accessible neutral UI, and fail-closed production readiness.
   production cookies, and sign-out without adding product roles or authorization.
 - Add a protected GitHub migration check that runs before Vercel production-domain assignment and
   never during dependency installation, Next.js build, Vercel build, or application startup.
+- Keep push/pull-request checks event-safe, pass declared runtime variables through Turbo
+  integration tasks, and use GitHub default CodeQL without a conflicting advanced workflow.
 - Replace host-specific Azure IaC and delivery material with the retained false-only Foundry
   boundary, reserved Azure Monitor posture, and documented Vercel OIDC federation requirement for
   future Azure consumers.
@@ -130,6 +132,14 @@ false-only and emits no resources. Azure Monitor export remains reserved and rej
 Vercel runtime that consumes an approved Azure service must use a Vercel OIDC token exchanged
 through an exact Entra federated credential and narrow Azure RBAC; this PR creates neither.
 
+### FS-005: CI event and scanner compatibility
+
+Specification validation treats an empty `GITHUB_BASE_REF` on push as absent. CI compares pull
+requests and nondefault branch pushes against the fetched repository base, while default-branch
+pushes compare against their prior commit. Turbo explicitly passes every local PostgreSQL runtime
+field, including `NEXT_PUBLIC_RUNTIME_MODE`, to `test:integration`. The repository relies on the
+configured GitHub default CodeQL setup and must not also submit SARIF from an advanced workflow.
+
 ## Affected Files
 
 - `CONSTITUTION.md` — make provider credential rules explicit without permitting committed secrets.
@@ -174,6 +184,9 @@ through an exact Entra federated credential and narrow Azure RBAC; this PR creat
 - [x] **AC-009**: Deterministic repository, integration, browser/accessibility, build, and
       retained-IaC checks pass using the pinned toolchain without contacting Vercel, Supabase,
       Azure, or a model.
+- [x] **AC-010**: Push specification validation resolves no empty `origin/` base and keeps feature
+      branches compared to the repository base, Turbo integration receives its declared environment,
+      and CodeQL has only one GitHub setup.
 
 ## Migration and Configuration
 
@@ -207,6 +220,7 @@ remain production blockers.
 | AC-007    | automated | `pnpm infra:validate` and repository search assertions           |
 | AC-008    | CI        | `pnpm spec:validate:all` and architecture review                 |
 | AC-009    | CI        | `pnpm check`, `pnpm test:integration`, `pnpm e2e`, `pnpm build`  |
+| AC-010    | automated | `scripts/specs/validate.test.ts`, `turbo.json`, workflow audit   |
 
 ## Status
 

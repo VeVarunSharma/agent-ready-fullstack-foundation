@@ -291,3 +291,6 @@ pnpm --filter @repo/web lint
 pnpm test:unit
 pnpm e2e
 ```
+
+Push and pull-request CI must resolve their Git baselines without weakening the design-impact PRD
+gate; the rendered design checks and this contract remain required on both event types.

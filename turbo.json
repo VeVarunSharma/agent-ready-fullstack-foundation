@@ -36,6 +36,20 @@
     "test:integration": {
       "dependsOn": ["^build"],
       "cache": false,
+      "env": [
+        "AUTH_MODE",
+        "DATABASE_HOST",
+        "DATABASE_MODE",
+        "DATABASE_NAME",
+        "DATABASE_PASSWORD",
+        "DATABASE_PORT",
+        "DATABASE_USER",
+        "HOST_MODE",
+        "LOGGING_MODE",
+        "NEXT_PUBLIC_RUNTIME_MODE",
+        "RUNTIME_MODE",
+        "TELEMETRY_MODE"
+      ],
       "outputs": []
     },
     "e2e": {

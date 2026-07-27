@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+
 import { loadGitContext, validateRepository, type ValidationIssue } from "./model.js";
 
 interface CliOptions {
@@ -33,14 +35,24 @@ function printIssues(issues: readonly ValidationIssue[]): void {
   }
 }
 
+interface BaseEnvironment {
+  readonly GITHUB_BASE_REF?: string;
+  readonly SPEC_BASE_REF?: string;
+}
+
+export function resolveEnvironmentBase(environment: BaseEnvironment): string | undefined {
+  const explicitBase = environment.SPEC_BASE_REF?.trim();
+  const githubBase = environment.GITHUB_BASE_REF?.trim();
+  if (explicitBase !== undefined && explicitBase !== "") {
+    return explicitBase;
+  }
+  return githubBase === undefined || githubBase === "" ? undefined : `origin/${githubBase}`;
+}
+
 function main(): void {
   try {
     const options = parseArguments(process.argv.slice(2));
-    const environmentBase =
-      process.env.SPEC_BASE_REF ??
-      (process.env.GITHUB_BASE_REF === undefined
-        ? undefined
-        : `origin/${process.env.GITHUB_BASE_REF}`);
+    const environmentBase = resolveEnvironmentBase(process.env);
     const git = loadGitContext(process.cwd(), options.base ?? environmentBase);
     const issues = [...git.issues];
 
@@ -67,4 +79,6 @@ function main(): void {
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

@@ -15,6 +15,14 @@ env:
   CI: "true"
   NEXT_PUBLIC_RUNTIME_MODE: test
   NEXT_TELEMETRY_DISABLED: "1"
+  SPEC_BASE_REF: >-
+    ${{
+      github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) ||
+      github.ref_name != github.event.repository.default_branch &&
+      format('origin/{0}', github.event.repository.default_branch) ||
+      github.event.before != '0000000000000000000000000000000000000000' && github.event.before ||
+      github.sha
+    }}
   TURBO_TELEMETRY_DISABLED: "1"
 
 jobs:

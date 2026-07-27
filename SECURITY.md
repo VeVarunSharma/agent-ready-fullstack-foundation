@@ -37,8 +37,8 @@ Do not test a Vercel, Supabase, or Azure environment without explicit authorizat
   SQL, prompts, provider errors, and unrestricted text are prohibited.
 - Semantic tokens, visible focus, labels/status text, reduced motion, and Playwright/axe checks
   cover the neutral UI and Auth form.
-- Exact stable dependencies, lockfile policy, SHA-pinned workflow actions, CodeQL, and deterministic
-  checks protect the source path.
+- Exact stable dependencies, lockfile policy, SHA-pinned workflow actions, and deterministic checks
+  protect the source path.
 - Provider-boundary Bicep compiles to zero resources and tests that Foundry, Azure Monitor export,
   and Azure runtime access remain disabled.
 
@@ -51,6 +51,9 @@ Do not test a Vercel, Supabase, or Azure environment without explicit authorizat
   roles, network restrictions, backups, PITR, and restore.
 - GitHub `production` environment, reviewers, branch rules, migration secrets, and selection of the
   stable migration job as a Vercel Deployment Check.
+- GitHub default CodeQL setup and its repository/ruleset configuration. A checked-in advanced CodeQL
+  workflow is intentionally absent because GitHub rejects advanced SARIF while default setup is
+  enabled.
 - Azure Monitor export, Vercel Log Drain, collector, Application Insights, and all Azure resources.
 - Vercel-to-Azure OIDC federated credentials and RBAC; no Azure consumer currently exists.
 - Foundry account/project/model/agent/data plane; the boundary is false-only.

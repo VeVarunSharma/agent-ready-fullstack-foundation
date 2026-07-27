@@ -92,7 +92,7 @@ checks, action pin review, environment audit, secret rotation, and log retention
 ## 4. Release sequence
 
 1. PR checks run exact dependency, format, lint, type, unit, specification, build, local PostgreSQL,
-   browser/axe, CodeQL, and zero-resource IaC validation.
+   browser/axe, GitHub default CodeQL, and zero-resource IaC validation.
 2. Vercel creates a preview from the reviewed branch. Test only against nonproduction Supabase.
 3. Merge to `main`. Vercel creates a production build but required Deployment Checks hold domain
    assignment.

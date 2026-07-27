@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+autoInstallPeers: false
+strictPeerDependencies: true
+saveExact: true
+engineStrict: true
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - globals@17.8.0

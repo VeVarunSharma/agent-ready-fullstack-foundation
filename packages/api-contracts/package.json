@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@orpc/contract": "1.14.10",
-    "zod": "4.4.3"
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
